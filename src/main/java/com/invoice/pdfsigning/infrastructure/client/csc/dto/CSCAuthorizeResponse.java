@@ -1,0 +1,29 @@
+package com.invoice.pdfsigning.infrastructure.client.csc.dto;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * CSC API authorize response DTO.
+ *
+ * Contains the SAD (Signature Activation Data) token used for signing.
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class CSCAuthorizeResponse {
+
+    /**
+     * Signature Activation Data token
+     */
+    @JsonProperty("SAD")
+    private String SAD;
+
+    /**
+     * Expiration time of the SAD token (optional)
+     */
+    @JsonProperty("expiresIn")
+    private Long expiresIn;
+}

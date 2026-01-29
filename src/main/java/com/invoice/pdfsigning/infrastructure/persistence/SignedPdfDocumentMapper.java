@@ -1,0 +1,58 @@
+package com.invoice.pdfsigning.infrastructure.persistence;
+
+import com.invoice.pdfsigning.domain.model.SignedPdfDocument;
+import com.invoice.pdfsigning.domain.model.SignedPdfDocumentId;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingConstants;
+
+import java.util.UUID;
+
+/**
+ * MapStruct mapper for converting between SignedPdfDocument domain model
+ * and SignedPdfDocumentEntity JPA entity.
+ *
+ * This mapper handles the impedance mismatch between the domain layer
+ * (value objects, immutability) and the persistence layer (JPA entities).
+ */
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
+public interface SignedPdfDocumentMapper {
+
+    /**
+     * Converts a domain model to a JPA entity.
+     *
+     * @param domain the domain model
+     * @return the JPA entity
+     */
+    @Mapping(source = "id", target = "id")
+    SignedPdfDocumentEntity toEntity(SignedPdfDocument domain);
+
+    /**
+     * Converts a JPA entity to a domain model.
+     *
+     * @param entity the JPA entity
+     * @return the domain model
+     */
+    @Mapping(source = "id", target = "id")
+    SignedPdfDocument toDomain(SignedPdfDocumentEntity entity);
+
+    /**
+     * Maps SignedPdfDocumentId to UUID.
+     *
+     * @param id the SignedPdfDocumentId
+     * @return the UUID value
+     */
+    default UUID map(SignedPdfDocumentId id) {
+        return id != null ? id.getValue() : null;
+    }
+
+    /**
+     * Maps UUID to SignedPdfDocumentId.
+     *
+     * @param uuid the UUID
+     * @return the SignedPdfDocumentId
+     */
+    default SignedPdfDocumentId map(UUID uuid) {
+        return uuid != null ? SignedPdfDocumentId.of(uuid) : null;
+    }
+}

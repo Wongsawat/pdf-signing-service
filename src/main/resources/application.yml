@@ -1,0 +1,169 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: pdf-signing-service
+
+  # Database configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:pdfsigning_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  # JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+
+  # Flyway configuration
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  # Kafka configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumer:
+      group-id: pdf-signing-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.records: 10
+        session.timeout.ms: 30000
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        max.in.flight.requests.per.connection: 5
+        enable.idempotence: true
+    listener:
+      ack-mode: manual
+      concurrency: 3
+
+  # Cloud configuration
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 30000
+            loggerLevel: basic
+          csc-auth-client:
+            url: ${CSC_SERVICE_URL:http://localhost:9000}
+          csc-api-client:
+            url: ${CSC_SERVICE_URL:http://localhost:9000}
+
+# Eureka configuration
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:false}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+
+# Application-specific configuration
+app:
+  kafka:
+    topics:
+      pdf-generated: pdf.generated
+      pdf-signing-requested: pdf.signing.requested
+      pdf-signed: pdf.signed
+
+  csc:
+    service-url: ${CSC_SERVICE_URL:http://localhost:9000}
+    auth-endpoint: /csc/v2/oauth2/authorize
+    sign-endpoint: /csc/v2/signatures/signDocument
+    credential-id: ${CSC_CREDENTIAL_ID:default-credential}
+    signature-level: PAdES-BASELINE-T
+    signature-form: attached
+    digest-algorithm: SHA256
+    reason: Thai e-Tax Invoice Digital Signature
+    location: Thailand
+    contact-info: ${CSC_CONTACT_INFO:}
+    timeout-seconds: 30
+
+  signing:
+    max-retries: ${SIGNING_MAX_RETRIES:3}
+    retry-delay-seconds: ${SIGNING_RETRY_DELAY:5}
+
+  storage:
+    base-path: ${SIGNED_PDF_STORAGE_PATH:/var/signed-documents}
+    base-url: ${SIGNED_PDF_STORAGE_BASE_URL:http://localhost:8087}
+
+# Resilience4j configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      csc-auth:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+      csc-api:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+
+  timelimiter:
+    instances:
+      csc-auth:
+        timeoutDuration: 5s
+      csc-api:
+        timeoutDuration: 30s
+
+# Actuator configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.invoice.pdfsigning: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.cloud.openfeign: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
