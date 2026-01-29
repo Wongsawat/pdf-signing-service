@@ -33,30 +33,6 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
 
-  # Kafka configuration
-  kafka:
-    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
-    consumer:
-      group-id: pdf-signing-service
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      properties:
-        max.poll.records: 10
-        session.timeout.ms: 30000
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all
-      retries: 3
-      properties:
-        max.in.flight.requests.per.connection: 5
-        enable.idempotence: true
-    listener:
-      ack-mode: manual
-      concurrency: 3
-
   # Cloud configuration
   cloud:
     openfeign:
@@ -70,6 +46,17 @@ spring:
             url: ${CSC_SERVICE_URL:http://localhost:9000}
           csc-api-client:
             url: ${CSC_SERVICE_URL:http://localhost:9000}
+
+# Apache Camel configuration
+camel:
+  springboot:
+    name: pdf-signing-camel
+    main-run-controller: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
 
 # Eureka configuration
 eureka:
@@ -86,10 +73,12 @@ eureka:
 # Application-specific configuration
 app:
   kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     topics:
       pdf-generated: pdf.generated
       pdf-signing-requested: pdf.signing.requested
       pdf-signed: pdf.signed
+      dlq: pdf.signing.dlq
 
   csc:
     service-url: ${CSC_SERVICE_URL:http://localhost:9000}
@@ -147,7 +136,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,camelroutes
   endpoint:
     health:
       show-details: when-authorized
@@ -161,7 +150,8 @@ logging:
   level:
     root: INFO
     com.invoice.pdfsigning: DEBUG
-    org.springframework.kafka: INFO
+    org.apache.camel: INFO
+    org.apache.camel.component.kafka: DEBUG
     org.springframework.cloud.openfeign: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
