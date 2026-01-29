@@ -19,10 +19,11 @@ The PDF Signing Service:
 |-----------|------------|
 | Language | Java 21 |
 | Framework | Spring Boot 3.2.5 |
+| Messaging | Apache Camel 4.14.4 |
 | HTTP Client | Spring Cloud OpenFeign |
 | Circuit Breaker | Resilience4j |
 | Database | PostgreSQL |
-| Messaging | Apache Kafka |
+| Message Broker | Apache Kafka |
 | Signing API | CSC API v2.0 (eidasremotesigning) |
 | Service Discovery | Netflix Eureka |
 
@@ -37,7 +38,7 @@ The PDF Signing Service:
 ## PDF Signing Flow
 
 ```
-1. Receive PdfGeneratedEvent from Kafka
+1. Receive PdfGeneratedEvent from Kafka (via Camel)
    ↓
 2. Check idempotency (already signed?)
    ↓
@@ -55,10 +56,10 @@ The PDF Signing Service:
    ↓
 9. Mark as completed (status = COMPLETED)
    ↓
-10. Publish PdfSignedEvent
+10. Publish PdfSignedEvent (via Camel)
 ```
 
-## Kafka Integration
+## Kafka Integration (via Apache Camel)
 
 ### Consumed Topics
 - `pdf.generated` - PDF generation completed (from invoice-pdf-generation-service, taxinvoice-pdf-generation-service)
@@ -66,6 +67,19 @@ The PDF Signing Service:
 
 ### Published Topics
 - `pdf.signed` - PDF signing completed (to document-storage-service, notification-service)
+- `pdf.signing.dlq` - Dead Letter Queue for failed events
+
+### Camel Routes
+
+**Consumer Routes:**
+- `kafka:pdf.generated` → `PdfSigningOrchestrationService`
+- `kafka:pdf.signing.requested` → `PdfSigningOrchestrationService`
+
+**Producer Route:**
+- `direct:publish-pdf-signed` → `kafka:pdf.signed`
+
+**Error Handling:**
+- Dead Letter Channel with exponential backoff (3 retries, 1s→10s max delay)
 
 ### Event Schema
 
@@ -196,8 +210,8 @@ src/main/java/com/invoice/pdfsigning/
 └── infrastructure/
     ├── persistence/        # JPA entities, repositories
     ├── client/             # CSC API Feign clients
-    ├── messaging/          # Kafka consumers/producers
-    └── config/             # Configuration classes
+    ├── messaging/          # EventPublisher (Camel producer)
+    └── config/             # PdfSigningRouteConfig, Feign, etc.
 ```
 
 ## Key Features
@@ -208,15 +222,16 @@ src/main/java/com/invoice/pdfsigning/
 
 ### Retry Logic
 - Failed signings automatically retried up to 3 times
-- Exponential backoff via Kafka consumer retry
+- Camel Dead Letter Channel with exponential backoff (1s→10s max delay)
 
 ### Circuit Breaker
 - Resilience4j circuit breaker protects CSC API calls
 - Automatic fallback and recovery
 
-### Manual Acknowledgment
-- Kafka messages acknowledged only after successful processing
-- Failed messages retried automatically
+### Apache Camel Error Handling
+- Dead Letter Channel pattern routes failed events to DLQ topic
+- `autoCommitEnable=false` ensures Camel only commits on success
+- Failed messages automatically retried with exponential backoff
 
 ## Integration with CSC API
 
@@ -225,6 +240,13 @@ This service integrates with **eidasremotesigning** for PDF signing:
 1. **Authorization**: Get SAD token via `/csc/v2/oauth2/authorize`
 2. **Signing**: Sign PDF via `/csc/v2/signatures/signDocument`
 3. **PAdES Format**: PDF Advanced Electronic Signatures with timestamp
+
+## Actuator Endpoints
+
+- `/actuator/health` - Health check
+- `/actuator/health/camel` - Camel health status
+- `/actuator/camelroutes` - List all Camel routes
+- `/actuator/metrics` - Application metrics
 
 ## License
 
