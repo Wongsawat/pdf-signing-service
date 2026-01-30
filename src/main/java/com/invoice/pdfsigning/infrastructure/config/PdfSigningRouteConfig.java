@@ -17,7 +17,8 @@ import org.springframework.stereotype.Component;
  * - kafka:pdf.signing.requested (unified topic)
  *
  * Produces to:
- * - kafka:pdf.signed (to document-storage-service, notification-service)
+ * - kafka:pdf.signed (to notification-service only)
+ * - kafka:pdf-storage-requested (to document-storage-service only)
  */
 @Component
 @Slf4j
@@ -36,6 +37,9 @@ public class PdfSigningRouteConfig extends RouteBuilder {
 
     @Value("${app.kafka.topics.pdf-signed}")
     private String pdfSignedTopic;
+
+    @Value("${app.kafka.topics.pdf-storage-requested}")
+    private String pdfStorageRequestedTopic;
 
     @Value("${app.kafka.topics.dlq:pdf.signing.dlq}")
     private String dlqTopic;
@@ -113,13 +117,26 @@ public class PdfSigningRouteConfig extends RouteBuilder {
             .log("Successfully processed PDF signing for invoice: ${body.invoiceId}");
 
         // ============================================================
-        // PRODUCER ROUTE: pdf.signed
+        // PRODUCER ROUTE: pdf.signed multicast
         // ============================================================
         from("direct:publish-pdf-signed")
             .routeId("pdf-signed-producer")
             .log("Publishing PdfSignedEvent: ${body.invoiceNumber}")
+            .multicast()
+                .parallelProcessing()
+                .to("direct:publish-to-notification")
+                .to("direct:publish-to-storage");
+
+        from("direct:publish-to-notification")
+            .routeId("pdf-signed-notification-producer")
             .marshal().json(JsonLibrary.Jackson)
             .to("kafka:" + pdfSignedTopic + "?brokers=" + kafkaBrokers + "&key=${body.invoiceId}")
-            .log("Published PdfSignedEvent to: " + pdfSignedTopic);
+            .log("Published PdfSignedEvent to notification: " + pdfSignedTopic);
+
+        from("direct:publish-to-storage")
+            .routeId("pdf-signed-storage-producer")
+            .marshal().json(JsonLibrary.Jackson)
+            .to("kafka:" + pdfStorageRequestedTopic + "?brokers=" + kafkaBrokers + "&key=${body.invoiceId}")
+            .log("Published PdfSignedEvent to storage: " + pdfStorageRequestedTopic);
     }
 }

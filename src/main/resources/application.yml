@@ -78,6 +78,7 @@ app:
       pdf-generated: pdf.generated
       pdf-signing-requested: pdf.signing.requested
       pdf-signed: pdf.signed
+      pdf-storage-requested: pdf-storage-requested
       dlq: pdf.signing.dlq
 
   csc:
