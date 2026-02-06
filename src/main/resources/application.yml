@@ -150,7 +150,7 @@ management:
 logging:
   level:
     root: INFO
-    com.invoice.pdfsigning: DEBUG
+    com.wpanther.pdfsigning: DEBUG
     org.apache.camel: INFO
     org.apache.camel.component.kafka: DEBUG
     org.springframework.cloud.openfeign: DEBUG
