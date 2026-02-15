@@ -1,15 +1,16 @@
 # PDF Signing Service
 
-Microservice for digitally signing PDF documents using PAdES (PDF Advanced Electronic Signatures) format.
+Microservice for digitally signing PDF documents using PAdES (PDF Advanced Electronic Signatures) format via saga orchestration.
 
 ## Overview
 
 The PDF Signing Service:
 
-- ✅ **Downloads** unsigned PDFs from pdf-generation-service
+- ✅ **Consumes** signing commands from saga orchestrator
 - ✅ **Signs** PDFs using PAdES-BASELINE-T format via CSC API v2.0
 - ✅ **Stores** signed PDFs to filesystem
-- ✅ **Publishes** events for downstream services
+- ✅ **Publishes** saga replies to orchestrator (via outbox + Debezium CDC)
+- ✅ **Publishes** notification events to notification-service (observer pattern)
 
 ## Architecture
 
@@ -25,153 +26,231 @@ The PDF Signing Service:
 | Database | PostgreSQL |
 | Message Broker | Apache Kafka |
 | Signing API | CSC API v2.0 (eidasremotesigning) |
-| Service Discovery | Netflix Eureka |
+| Saga Library | saga-commons 1.0.0-SNAPSHOT |
+| Event Routing | Debezium CDC (outbox pattern) |
+
+### Design Patterns
+
+- **Saga Orchestration**: Command/reply pattern with saga orchestrator
+- **Transactional Outbox**: Reliable event publishing via Debezium CDC
+- **Dual-Publishing**: Saga replies (to orchestrator) + notifications (to observer)
+- **Domain-Driven Design**: Aggregate roots, value objects, repository pattern
 
 ### Domain Model
 
 **Aggregate Root:**
 - `SignedPdfDocument` - Manages PDF signing lifecycle
 
-**Status Enum:**
-- `SigningStatus` - PENDING → SIGNING → COMPLETED/FAILED
-
-## PDF Signing Flow
-
+**State Machine:**
 ```
-1. Receive PdfGeneratedEvent from Kafka (via Camel)
-   ↓
-2. Check idempotency (already signed?)
-   ↓
-3. Create SignedPdfDocument aggregate (status = PENDING)
-   ↓
-4. Start signing (status = SIGNING)
-   ↓
-5. Download PDF from URL
-   ↓
-6. Authorize with CSC API (get SAD token)
-   ↓
-7. Sign PDF via CSC API (PAdES-BASELINE-T)
-   ↓
-8. Save signed PDF to filesystem
-   ↓
-9. Mark as completed (status = COMPLETED)
-   ↓
-10. Publish PdfSignedEvent (via Camel)
+PENDING → SIGNING → COMPLETED
+               ↓
+            FAILED
 ```
 
-## Kafka Integration (via Apache Camel)
+**Value Objects:**
+- `SignedPdfDocumentId` - UUID wrapper
+- `SigningStatus` - PENDING, SIGNING, COMPLETED, FAILED
+
+## Saga Orchestration Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Saga Orchestrator                          │
+│                           │                                    │
+│                           ▼                                    │
+│              saga.command.pdf-signing                       │
+│              (ProcessPdfSigningCommand)                   │
+│                           │                                    │
+│                           ▼                                    │
+│              ┌──────────────────────────────┐               │
+│              │  pdf-signing-service        │               │
+│              │  (Spring Boot 3.2.5)        │               │
+│              └──────────────────────────────┘               │
+│                           │                                    │
+│                           ├── [PDF Signing via CSC API]            │
+│                           │                                    │
+│                           ▼                                    │
+│              ┌───────────────────────────────┐              │
+│              │  PostgreSQL (pdfsigning_db)   │              │
+│              │  ┌─────────────────────────┐  │              │
+│              │  │ signed_pdf_documents     │  │              │
+│              │  │ outbox_events (CDC source)│  │              │
+│              │  └─────────────────────────┘  │              │
+│              └───────────────────────────────┘              │
+│                           │                                    │
+│            ┌──────────────┴───────────────┐                  │
+│            │                            │                  │
+│            ▼                            ▼                  │
+│   saga.reply.pdf-signing      notification.events               │
+│    (via Debezium CDC)          (via Debezium CDC)             │
+│            │                            │                  │
+│            ▼                            ▼                  │
+│   ┌─────────────────────┐     ┌──────────────────────┐         │
+│   │ Saga Orchestrator    │     │ notification-service │         │
+│   │ (next saga step)     │     │ (email/webhook)       │         │
+│   └─────────────────────┘     └──────────────────────┘         │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+```
+
+## Kafka Topics (Saga Orchestration)
 
 ### Consumed Topics
-- `pdf.generated` - PDF generation completed (from invoice-pdf-generation-service, taxinvoice-pdf-generation-service)
-- `pdf.signing.requested` - Alternative unified signing request topic
 
-### Published Topics
-- `pdf.signed` - PDF signing completed (to document-storage-service, notification-service)
-- `pdf.signing.dlq` - Dead Letter Queue for failed events
+| Topic | Event | Purpose |
+|-------|-------|---------|
+| `saga.command.pdf-signing` | `ProcessPdfSigningCommand` | Sign PDF command from orchestrator |
+| `saga.compensation.pdf-signing` | `CompensatePdfSigningCommand` | Rollback command from orchestrator |
 
-### Camel Routes
+### Published Topics (via outbox + Debezium CDC)
 
-**Consumer Routes:**
-- `kafka:pdf.generated` → `PdfSigningOrchestrationService`
-- `kafka:pdf.signing.requested` → `PdfSigningOrchestrationService`
+| Topic | Event | Purpose |
+|-------|-------|---------|
+| `saga.reply.pdf-signing` | `PdfSigningReplyEvent` | Reply to orchestrator (SUCCESS/FAILURE/COMPENSATED) |
+| `notification.events` | `PdfSignedNotificationEvent` / `PdfSigningFailedNotificationEvent` | Notification to notification-service (observer) |
+| `pdf.signing.dlq` | Failed events | Dead Letter Queue |
 
-**Producer Route:**
-- `direct:publish-pdf-signed` → `kafka:pdf.signed`
+### Event Schemas
 
-**Error Handling:**
-- Dead Letter Channel with exponential backoff (3 retries, 1s→10s max delay)
-
-### Event Schema
-
-**Input: PdfGeneratedEvent** (consumed from `pdf.generated`)
+**ProcessPdfSigningCommand** (input):
 ```json
 {
-  "eventId": "uuid",
-  "eventType": "PdfGenerated",
-  "occurredAt": "2025-01-29T10:30:00",
-  "version": "1.0",
-  "correlationId": "uuid",
-  "invoiceId": "uuid",
-  "invoiceNumber": "INV-2025-001",
+  "sagaId": "saga-uuid",
+  "sagaStep": "sign-pdf",
+  "correlationId": "correlation-uuid",
+  "documentId": "invoice-uuid",
+  "invoiceNumber": "INV-2024-001",
   "documentType": "INVOICE",
-  "documentId": "uuid",
-  "documentUrl": "http://localhost:8083/2025/01/07/invoice-123.pdf",
-  "fileSize": 45678,
+  "pdfUrl": "http://pdf-generation-service/...",
+  "pdfSize": 45678,
   "xmlEmbedded": true
 }
 ```
 
-**Output: PdfSignedEvent** (published to `pdf.signed`)
+**PdfSigningReplyEvent** (output to orchestrator):
 ```json
 {
-  "eventId": "uuid",
-  "eventType": "PdfSigned",
-  "occurredAt": "2025-01-29T10:31:00",
-  "version": "1.0",
-  "correlationId": "uuid",
-  "invoiceId": "uuid",
-  "invoiceNumber": "INV-2025-001",
-  "documentType": "INVOICE",
-  "signedDocumentId": "uuid",
-  "signedPdfUrl": "http://localhost:8087/signed-documents/2025/01/07/signed-pdf-abc123.pdf",
+  "sagaId": "saga-uuid",
+  "sagaStep": "sign-pdf",
+  "correlationId": "correlation-uuid",
+  "status": "SUCCESS",
+  "signedDocumentId": "document-uuid",
+  "signedPdfUrl": "http://localhost:8087/signed/...",
   "signedPdfSize": 48234,
   "transactionId": "TXN-uuid",
   "certificate": "-----BEGIN CERTIFICATE-----...",
   "signatureLevel": "PAdES-BASELINE-T",
-  "signatureTimestamp": "2025-01-29T10:31:00"
+  "signatureTimestamp": "2025-01-29T10:31:00Z"
+}
+```
+
+**PdfSignedNotificationEvent** (output to notification-service):
+```json
+{
+  "invoiceId": "invoice-uuid",
+  "invoiceNumber": "INV-2024-001",
+  "documentType": "INVOICE",
+  "signedDocumentId": "document-uuid",
+  "signedPdfUrl": "http://localhost:8087/signed/...",
+  "signedPdfSize": 48234,
+  "signatureLevel": "PAdES-BASELINE-T",
+  "signatureTimestamp": "2025-01-29T10:31:00Z",
+  "correlationId": "correlation-uuid"
 }
 ```
 
 ## Database Schema
 
 ### signed_pdf_documents Table
+
 - `id` (UUID) - Primary key
-- `invoice_id` (VARCHAR) - Reference to invoice (unique)
+- `invoice_id` (VARCHAR) - Reference to invoice (unique constraint for idempotency)
 - `invoice_number` (VARCHAR) - Invoice identifier
 - `document_type` (VARCHAR) - Document type (INVOICE, TAX_INVOICE, etc.)
 - `original_pdf_url` (VARCHAR) - URL of unsigned PDF
 - `original_pdf_size` (BIGINT) - Original PDF file size
-- `signed_pdf_path` (VARCHAR) - Filesystem path
-- `signed_pdf_url` (VARCHAR) - HTTP URL
+- `signed_pdf_path` (VARCHAR) - Filesystem path to signed PDF
+- `signed_pdf_url` (VARCHAR) - Public URL to access signed PDF
 - `signed_pdf_size` (BIGINT) - Signed PDF file size
 - `transaction_id` (VARCHAR) - CSC API transaction ID
 - `certificate` (TEXT) - PEM-encoded signing certificate
-- `signature_level` (VARCHAR) - Signature level
+- `signature_level` (VARCHAR) - Signature level (PAdES-BASELINE-T)
 - `signature_timestamp` (TIMESTAMP) - Signature timestamp from CSC API
-- `status` (VARCHAR) - Signing status (PENDING, SIGNING, COMPLETED, FAILED)
+- `status` (VARCHAR) - PENDING, SIGNING, COMPLETED, FAILED
 - `error_message` (TEXT) - Error message if failed
 - `retry_count` (INTEGER) - Number of retry attempts
 - `correlation_id` (VARCHAR) - Correlation ID for tracing
 - Timestamps: `created_at`, `completed_at`, `updated_at`
+
+### outbox_events Table (Transactional Outbox Pattern)
+
+- `id` (UUID) - Primary key
+- `aggregate_type` (VARCHAR) - Aggregate type (e.g., "SignedPdfDocument")
+- `aggregate_id` (VARCHAR) - Aggregate ID
+- `event_type` (VARCHAR) - Event type (e.g., "PdfSigningReply")
+- `payload` (TEXT) - Event payload (JSON)
+- `status` (VARCHAR) - PENDING, PUBLISHED, FAILED
+- `topic` (VARCHAR) - Target Kafka topic for Debezium CDC routing
+- `partition_key` (VARCHAR) - Kafka partition key
+- `headers` (TEXT) - Kafka headers (JSON)
+- `created_at`, `published_at` (TIMESTAMP) - Timestamps
 
 ## Configuration
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|------------|
+|----------|-------------|---------|
 | `DB_HOST` | PostgreSQL host | `localhost` |
 | `DB_NAME` | Database name | `pdfsigning_db` |
-| `KAFKA_BROKERS` | Kafka servers | `localhost:9092` |
+| `KAFKA_BROKERS` | Kafka bootstrap servers | `localhost:9092` |
 | `CSC_SERVICE_URL` | eidasremotesigning URL | `http://localhost:9000` |
 | `CSC_CREDENTIAL_ID` | CSC credential ID | `default-credential` |
-| `SIGNED_PDF_STORAGE_PATH` | Storage path | `/var/signed-documents` |
-| `SIGNING_MAX_RETRIES` | Max retry attempts | `3` |
+| `SIGNED_PDF_STORAGE_PATH` | Storage path for signed PDFs | `/var/signed-documents` |
+| `SIGNED_PDF_STORAGE_BASE_URL` | Base URL for signed PDF access | `http://localhost:8087` |
+| `SIGNING_MAX_RETRIES` | Maximum retry attempts | `3` |
+| `OUTBOX_CLEANUP_ENABLED` | Enable outbox cleanup job | `false` |
+
+### Application Configuration
+
+```yaml
+app:
+  kafka:
+    topics:
+      saga-command: saga.command.pdf-signing
+      saga-compensation: saga.compensation.pdf-signing
+      saga-reply: saga.reply.pdf-signing
+      notification-events: notification.events
+      dlq: pdf.signing.dlq
+
+saga:
+  outbox:
+    cleanup:
+      enabled: false
+      cron-expression: "0 0 2 * * ?"
+      retention-hours: 24
+```
 
 ## Running the Service
 
 ### Prerequisites
-1. PostgreSQL database
-2. Kafka broker
-3. eidasremotesigning service (CSC API)
-4. Storage directory with write permissions
+
+1. **PostgreSQL** database with `pdfsigning_db`
+2. **Kafka** broker
+3. **eidasremotesigning service** (CSC API v2.0) on `localhost:9000`
+4. **saga-commons** library installed: `cd /home/wpanther/projects/etax/saga-commons && mvn clean install`
+5. **Debezium CDC** connector registered (for outbox event routing)
+6. Storage directory with write permissions
 
 ### Build
+
 ```bash
 mvn clean package
 ```
 
 ### Run Locally
+
 ```bash
 export DB_HOST=localhost
 export KAFKA_BROKERS=localhost:9092
@@ -183,63 +262,97 @@ mkdir -p /var/signed-documents
 mvn spring-boot:run
 ```
 
-### Run with Docker
-```bash
-docker build -t pdf-signing-service:latest .
+### Run Tests
 
-docker run -p 8087:8087 \
-  -e DB_HOST=postgres \
-  -e KAFKA_BROKERS=kafka:29092 \
-  -e CSC_SERVICE_URL=http://eidasremotesigning:9000 \
-  -v /host/signed-documents:/var/signed-documents \
-  pdf-signing-service:latest
+```bash
+# Run all tests (11 unit tests for saga components)
+mvn test
+
+# Run with coverage
+mvn verify
 ```
+
+### Database Migrations
+
+```bash
+mvn flyway:migrate
+mvn flyway:info
+```
+
+## Debezium CDC Setup
+
+The service uses the **transactional outbox pattern** with Debezium CDC for reliable event publishing.
+
+**Register the connector:**
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @debezium/connector-config.json
+```
+
+**Check status:**
+```bash
+curl http://localhost:8083/connectors/pdf-signing-outbox-connector/status
+```
+
+See `debezium/DEBEZIUM_SETUP.md` for complete Debezium setup documentation.
 
 ## Project Structure
 
 ```
-src/main/java/com/invoice/pdfsigning/
+src/main/java/com/wpanther/pdfsigning/
 ├── PdfSigningServiceApplication.java
 ├── domain/
-│   ├── model/              # SignedPdfDocument aggregate
-│   ├── repository/         # Repository interface
+│   ├── model/              # SignedPdfDocument aggregate, value objects
+│   ├── repository/         # Repository interfaces
 │   ├── service/            # PdfSigningService interface
-│   └── event/              # Kafka event DTOs
+│   └── event/              # Saga commands, replies, notifications
 ├── application/
-│   └── service/            # PdfSigningOrchestrationService
+│   └── service/            # SagaCommandHandler (process + compensate)
 └── infrastructure/
     ├── persistence/        # JPA entities, repositories
+    │   └── outbox/         # Outbox pattern (CDC source)
     ├── client/             # CSC API Feign clients
-    ├── messaging/          # EventPublisher (Camel producer)
-    └── config/             # PdfSigningRouteConfig, Feign, etc.
+    ├── messaging/          # Event publishers (outbox)
+    └── config/             # SagaRouteConfig, Feign, etc.
 ```
 
 ## Key Features
 
+### Saga Orchestration
+- Command/reply pattern with saga orchestrator
+- Compensation support for rollback scenarios
+- Idempotent command processing
+
+### Transactional Outbox
+- Events saved in same transaction as business state
+- Debezium CDC streams to Kafka reliably
+- Exactly-once delivery semantics
+
+### Dual-Publishing
+- Saga replies → orchestrator (for coordination)
+- Notification events → notification-service (observer pattern)
+
 ### Idempotency
 - Unique constraint on `invoice_id` prevents duplicate signing
-- Safe to replay Kafka messages
+- Already completed documents trigger immediate SUCCESS reply
 
 ### Retry Logic
-- Failed signings automatically retried up to 3 times
-- Camel Dead Letter Channel with exponential backoff (1s→10s max delay)
+- Failed signings retried up to 3 times
+- Exponential backoff for delays
 
 ### Circuit Breaker
 - Resilience4j circuit breaker protects CSC API calls
 - Automatic fallback and recovery
 
 ### Apache Camel Error Handling
-- Dead Letter Channel pattern routes failed events to DLQ topic
-- `autoCommitEnable=false` ensures Camel only commits on success
-- Failed messages automatically retried with exponential backoff
+- Dead Letter Channel with exponential backoff
+- Failed events routed to DLQ topic
 
-## Integration with CSC API
+## CSC API Integration
 
-This service integrates with **eidasremotesigning** for PDF signing:
-
-1. **Authorization**: Get SAD token via `/csc/v2/oauth2/authorize`
-2. **Signing**: Sign PDF via `/csc/v2/signatures/signDocument`
-3. **PAdES Format**: PDF Advanced Electronic Signatures with timestamp
+1. **Authorization**: `POST /csc/v2/oauth2/authorize` → SAD token
+2. **Signing**: `POST /csc/v2/signatures/signDocument` → signed PDF (PAdES-BASELINE-T)
 
 ## Actuator Endpoints
 
@@ -247,6 +360,11 @@ This service integrates with **eidasremotesigning** for PDF signing:
 - `/actuator/health/camel` - Camel health status
 - `/actuator/camelroutes` - List all Camel routes
 - `/actuator/metrics` - Application metrics
+
+## Documentation
+
+- **SAGA_MIGRATION_PLAN.md** - Detailed saga migration plan
+- **debezium/DEBEZIUM_SETUP.md** - Debezium CDC configuration guide
 
 ## License
 
