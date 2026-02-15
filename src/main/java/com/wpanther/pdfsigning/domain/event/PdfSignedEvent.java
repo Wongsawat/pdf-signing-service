@@ -1,12 +1,12 @@
 package com.wpanther.pdfsigning.domain.event;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wpanther.saga.domain.model.IntegrationEvent;
+import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Event published by pdf-signing-service when a PDF is digitally signed.
@@ -14,60 +14,98 @@ import java.time.LocalDateTime;
  *
  * Topic: pdf.signed
  */
-@Data
-@EqualsAndHashCode(callSuper = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter
 public class PdfSignedEvent extends IntegrationEvent {
 
-    /**
-     * Invoice identifier (UUID)
-     */
-    private String invoiceId;
+    private static final String EVENT_TYPE = "pdf.signed";
 
-    /**
-     * Human-readable invoice number
-     */
-    private String invoiceNumber;
+    @JsonProperty("invoiceId")
+    private final String invoiceId;
 
-    /**
-     * Document type (INVOICE, TAX_INVOICE, etc.)
-     */
-    private String documentType;
+    @JsonProperty("invoiceNumber")
+    private final String invoiceNumber;
 
-    /**
-     * Signed document identifier
-     */
-    private String signedDocumentId;
+    @JsonProperty("documentType")
+    private final String documentType;
 
-    /**
-     * URL to access the signed PDF
-     */
-    private String signedPdfUrl;
+    @JsonProperty("signedDocumentId")
+    private final String signedDocumentId;
 
-    /**
-     * File size of the signed PDF in bytes
-     */
-    private Long signedPdfSize;
+    @JsonProperty("signedPdfUrl")
+    private final String signedPdfUrl;
 
-    /**
-     * CSC API transaction ID
-     */
-    private String transactionId;
+    @JsonProperty("signedPdfSize")
+    private final Long signedPdfSize;
 
-    /**
-     * PEM-encoded signing certificate
-     */
-    private String certificate;
+    @JsonProperty("transactionId")
+    private final String transactionId;
 
-    /**
-     * Signature level (e.g., PAdES-BASELINE-T)
-     */
-    private String signatureLevel;
+    @JsonProperty("certificate")
+    private final String certificate;
 
-    /**
-     * Timestamp from the signing service
-     */
-    private LocalDateTime signatureTimestamp;
+    @JsonProperty("signatureLevel")
+    private final String signatureLevel;
+
+    @JsonProperty("signatureTimestamp")
+    private final Instant signatureTimestamp;
+
+    @JsonProperty("correlationId")
+    private final String correlationId;
+
+    // Constructor for creating new events
+    public PdfSignedEvent(String invoiceId, String invoiceNumber, String documentType,
+                          String signedDocumentId, String signedPdfUrl, Long signedPdfSize,
+                          String transactionId, String certificate, String signatureLevel,
+                          Instant signatureTimestamp, String correlationId) {
+        super();
+        this.invoiceId = invoiceId;
+        this.invoiceNumber = invoiceNumber;
+        this.documentType = documentType;
+        this.signedDocumentId = signedDocumentId;
+        this.signedPdfUrl = signedPdfUrl;
+        this.signedPdfSize = signedPdfSize;
+        this.transactionId = transactionId;
+        this.certificate = certificate;
+        this.signatureLevel = signatureLevel;
+        this.signatureTimestamp = signatureTimestamp;
+        this.correlationId = correlationId;
+    }
+
+    @Override
+    public String getEventType() {
+        return EVENT_TYPE;
+    }
+
+    // Constructor for deserialization
+    @JsonCreator
+    public PdfSignedEvent(
+        @JsonProperty("eventId") UUID eventId,
+        @JsonProperty("occurredAt") Instant occurredAt,
+        @JsonProperty("eventType") String eventType,
+        @JsonProperty("version") int version,
+        @JsonProperty("invoiceId") String invoiceId,
+        @JsonProperty("invoiceNumber") String invoiceNumber,
+        @JsonProperty("documentType") String documentType,
+        @JsonProperty("signedDocumentId") String signedDocumentId,
+        @JsonProperty("signedPdfUrl") String signedPdfUrl,
+        @JsonProperty("signedPdfSize") Long signedPdfSize,
+        @JsonProperty("transactionId") String transactionId,
+        @JsonProperty("certificate") String certificate,
+        @JsonProperty("signatureLevel") String signatureLevel,
+        @JsonProperty("signatureTimestamp") Instant signatureTimestamp,
+        @JsonProperty("correlationId") String correlationId
+    ) {
+        super(eventId, occurredAt, eventType, version);
+        this.invoiceId = invoiceId;
+        this.invoiceNumber = invoiceNumber;
+        this.documentType = documentType;
+        this.signedDocumentId = signedDocumentId;
+        this.signedPdfUrl = signedPdfUrl;
+        this.signedPdfSize = signedPdfSize;
+        this.transactionId = transactionId;
+        this.certificate = certificate;
+        this.signatureLevel = signatureLevel;
+        this.signatureTimestamp = signatureTimestamp;
+        this.correlationId = correlationId;
+    }
 }

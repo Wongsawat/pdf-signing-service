@@ -26,6 +26,7 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <flyway.version>10.10.0</flyway.version>
         <resilience4j.version>2.2.0</resilience4j.version>
+        <saga.commons.version>1.0.0-SNAPSHOT</saga.commons.version>
     </properties>
 
     <dependencyManagement>
@@ -167,6 +168,13 @@
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
             <version>${mapstruct.version}</version>
+        </dependency>
+
+        <!-- Saga Commons for outbox pattern -->
+        <dependency>
+            <groupId>com.wpanther</groupId>
+            <artifactId>saga-commons</artifactId>
+            <version>${saga.commons.version}</version>
         </dependency>
 
         <!-- Jackson for JSON processing -->

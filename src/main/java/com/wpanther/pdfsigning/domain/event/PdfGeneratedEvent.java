@@ -1,10 +1,12 @@
 package com.wpanther.pdfsigning.domain.event;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wpanther.saga.domain.model.IntegrationEvent;
+import lombok.Getter;
+
+import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Event published by pdf-generation-service when a PDF is generated.
@@ -12,45 +14,79 @@ import lombok.NoArgsConstructor;
  *
  * Topic: pdf.generated
  */
-@Data
-@EqualsAndHashCode(callSuper = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter
 public class PdfGeneratedEvent extends IntegrationEvent {
 
-    /**
-     * Invoice identifier (UUID)
-     */
-    private String invoiceId;
+    private static final String EVENT_TYPE = "pdf.generated";
 
-    /**
-     * Human-readable invoice number
-     */
-    private String invoiceNumber;
+    @JsonProperty("invoiceId")
+    private final String invoiceId;
 
-    /**
-     * Document type (INVOICE, TAX_INVOICE, etc.)
-     */
-    private String documentType;
+    @JsonProperty("invoiceNumber")
+    private final String invoiceNumber;
 
-    /**
-     * Document identifier from pdf-generation-service
-     */
-    private String documentId;
+    @JsonProperty("documentType")
+    private final String documentType;
 
-    /**
-     * URL to access the generated PDF
-     */
-    private String documentUrl;
+    @JsonProperty("documentId")
+    private final String documentId;
 
-    /**
-     * File size in bytes
-     */
-    private Long fileSize;
+    @JsonProperty("documentUrl")
+    private final String documentUrl;
 
-    /**
-     * Whether XML is embedded in the PDF
-     */
-    private Boolean xmlEmbedded;
+    @JsonProperty("fileSize")
+    private final Long fileSize;
+
+    @JsonProperty("xmlEmbedded")
+    private final Boolean xmlEmbedded;
+
+    @JsonProperty("correlationId")
+    private final String correlationId;
+
+    // Constructor for creating new events
+    public PdfGeneratedEvent(String invoiceId, String invoiceNumber, String documentType,
+                             String documentId, String documentUrl, Long fileSize,
+                             Boolean xmlEmbedded, String correlationId) {
+        super();
+        this.invoiceId = invoiceId;
+        this.invoiceNumber = invoiceNumber;
+        this.documentType = documentType;
+        this.documentId = documentId;
+        this.documentUrl = documentUrl;
+        this.fileSize = fileSize;
+        this.xmlEmbedded = xmlEmbedded;
+        this.correlationId = correlationId;
+    }
+
+    @Override
+    public String getEventType() {
+        return EVENT_TYPE;
+    }
+
+    // Constructor for deserialization
+    @JsonCreator
+    public PdfGeneratedEvent(
+        @JsonProperty("eventId") UUID eventId,
+        @JsonProperty("occurredAt") Instant occurredAt,
+        @JsonProperty("eventType") String eventType,
+        @JsonProperty("version") int version,
+        @JsonProperty("invoiceId") String invoiceId,
+        @JsonProperty("invoiceNumber") String invoiceNumber,
+        @JsonProperty("documentType") String documentType,
+        @JsonProperty("documentId") String documentId,
+        @JsonProperty("documentUrl") String documentUrl,
+        @JsonProperty("fileSize") Long fileSize,
+        @JsonProperty("xmlEmbedded") Boolean xmlEmbedded,
+        @JsonProperty("correlationId") String correlationId
+    ) {
+        super(eventId, occurredAt, eventType, version);
+        this.invoiceId = invoiceId;
+        this.invoiceNumber = invoiceNumber;
+        this.documentType = documentType;
+        this.documentId = documentId;
+        this.documentUrl = documentUrl;
+        this.fileSize = fileSize;
+        this.xmlEmbedded = xmlEmbedded;
+        this.correlationId = correlationId;
+    }
 }

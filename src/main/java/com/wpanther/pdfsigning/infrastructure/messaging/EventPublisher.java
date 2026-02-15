@@ -7,9 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.ProducerTemplate;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 /**
  * Apache Camel event publisher for PDF signed events.
  *
@@ -29,26 +26,20 @@ public class EventPublisher {
      * @param correlationId correlation ID for tracing
      */
     public void publishPdfSigned(SignedPdfDocument document, String correlationId) {
-        // Build event
-        PdfSignedEvent event = PdfSignedEvent.builder()
-                .invoiceId(document.getInvoiceId())
-                .invoiceNumber(document.getInvoiceNumber())
-                .documentType(document.getDocumentType())
-                .signedDocumentId(document.getId().asString())
-                .signedPdfUrl(document.getSignedPdfUrl())
-                .signedPdfSize(document.getSignedPdfSize())
-                .transactionId(document.getTransactionId())
-                .certificate(document.getCertificate())
-                .signatureLevel(document.getSignatureLevel())
-                .signatureTimestamp(document.getSignatureTimestamp())
-                .build();
-
-        // Set base event fields
-        event.setEventId(UUID.randomUUID().toString());
-        event.setEventType("PdfSigned");
-        event.setOccurredAt(LocalDateTime.now());
-        event.setVersion("1.0");
-        event.setCorrelationId(correlationId);
+        // Create event using constructor (base fields auto-generated)
+        PdfSignedEvent event = new PdfSignedEvent(
+            document.getInvoiceId(),
+            document.getInvoiceNumber(),
+            document.getDocumentType(),
+            document.getId().asString(),
+            document.getSignedPdfUrl(),
+            document.getSignedPdfSize(),
+            document.getTransactionId(),
+            document.getCertificate(),
+            document.getSignatureLevel(),
+            document.getSignatureTimestamp().atZone(java.time.ZoneId.systemDefault()).toInstant(),
+            correlationId
+        );
 
         // Publish via Camel route (Camel handles JSON marshalling and Kafka key)
         producerTemplate.sendBody("direct:publish-pdf-signed", event);
