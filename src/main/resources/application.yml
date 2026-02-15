@@ -78,10 +78,11 @@ app:
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     topics:
-      pdf-generated: pdf.generated
-      pdf-signing-requested: pdf.signing.requested
-      pdf-signed: pdf.signed
-      pdf-storage-requested: pdf-storage-requested
+      # Saga topics
+      saga-command: saga.command.pdf-signing
+      saga-compensation: saga.compensation.pdf-signing
+      saga-reply: saga.reply.pdf-signing
+      notification-events: notification.events
       dlq: pdf.signing.dlq
 
   csc:
@@ -104,6 +105,18 @@ app:
   storage:
     base-path: ${SIGNED_PDF_STORAGE_PATH:/var/signed-documents}
     base-url: ${SIGNED_PDF_STORAGE_BASE_URL:http://localhost:8087}
+
+# Saga-commons configuration (outbox pattern)
+saga:
+  outbox:
+    cleanup:
+      enabled: ${OUTBOX_CLEANUP_ENABLED:false}
+      cron-expression: "0 0 2 * * ?"
+      retention-hours: 24
+    publisher:
+      batch-size: 100
+      poll-interval-millis: 1000
+      max-retries: 3
 
 # Resilience4j configuration
 resilience4j:

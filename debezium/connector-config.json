@@ -1,0 +1,25 @@
+{
+  "name": "pdf-signing-outbox-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "${DB_HOST:localhost}",
+    "database.port": "5432",
+    "database.user": "${DB_USERNAME:postgres}",
+    "database.password": "${DB_PASSWORD:postgres}",
+    "database.dbname": "pdfsigning_db",
+    "topic.prefix": "pdf-signing",
+    "plugin.name": "pgoutput",
+    "table.include.list": "public.outbox_events",
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.table.field.event.type": "event_type",
+    "transforms.outbox.table.field.payload": "payload",
+    "transforms.outbox.table.field.additionalFields": "aggregateType,aggregateId",
+    "transforms.outbox.route.topic.replacement": "${topic}",
+    "transforms.outbox.route.key.field": "partition_key",
+    "transforms.outbox.route.by.field": "topic",
+    "transforms.outbox.lazy.initial.queries": "false",
+    "transforms.outbox.inegral.always.null": "true",
+    "transforms.outbox.null.field.default": "null"
+  }
+}

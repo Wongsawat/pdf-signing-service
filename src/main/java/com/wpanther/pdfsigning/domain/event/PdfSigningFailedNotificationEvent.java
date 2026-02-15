@@ -9,15 +9,15 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Event published by pdf-generation-service when a PDF is generated.
- * Consumed by pdf-signing-service to trigger PDF signing.
+ * Notification event when PDF signing fails.
+ * Published to: notification.events (via outbox pattern)
  *
- * Topic: pdf.generated
+ * This is a notification event for the notification-service observer.
  */
 @Getter
-public class PdfGeneratedEvent extends IntegrationEvent {
+public class PdfSigningFailedNotificationEvent extends IntegrationEvent {
 
-    private static final String EVENT_TYPE = "pdf.generated";
+    private static final String EVENT_TYPE = "PdfSigningFailed";
 
     @JsonProperty("invoiceId")
     private final String invoiceId;
@@ -28,33 +28,43 @@ public class PdfGeneratedEvent extends IntegrationEvent {
     @JsonProperty("documentType")
     private final String documentType;
 
-    @JsonProperty("documentId")
-    private final String documentId;
-
-    @JsonProperty("documentUrl")
-    private final String documentUrl;
-
-    @JsonProperty("fileSize")
-    private final Long fileSize;
-
-    @JsonProperty("xmlEmbedded")
-    private final Boolean xmlEmbedded;
+    @JsonProperty("errorMessage")
+    private final String errorMessage;
 
     @JsonProperty("correlationId")
     private final String correlationId;
 
-    // Constructor for creating new events
-    public PdfGeneratedEvent(String invoiceId, String invoiceNumber, String documentType,
-                             String documentId, String documentUrl, Long fileSize,
-                             Boolean xmlEmbedded, String correlationId) {
+    /**
+     * Factory method for creating new notification events.
+     */
+    public static PdfSigningFailedNotificationEvent create(
+            String invoiceId,
+            String invoiceNumber,
+            String documentType,
+            String errorMessage,
+            String correlationId) {
+
+        return new PdfSigningFailedNotificationEvent(
+            invoiceId, invoiceNumber, documentType,
+            errorMessage, correlationId
+        );
+    }
+
+    /**
+     * Constructor for creating new events.
+     */
+    private PdfSigningFailedNotificationEvent(
+            String invoiceId,
+            String invoiceNumber,
+            String documentType,
+            String errorMessage,
+            String correlationId) {
+
         super();
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
-        this.documentId = documentId;
-        this.documentUrl = documentUrl;
-        this.fileSize = fileSize;
-        this.xmlEmbedded = xmlEmbedded;
+        this.errorMessage = errorMessage;
         this.correlationId = correlationId;
     }
 
@@ -63,9 +73,11 @@ public class PdfGeneratedEvent extends IntegrationEvent {
         return EVENT_TYPE;
     }
 
-    // Constructor for deserialization
+    /**
+     * Constructor for deserialization from Kafka.
+     */
     @JsonCreator
-    public PdfGeneratedEvent(
+    public PdfSigningFailedNotificationEvent(
         @JsonProperty("eventId") UUID eventId,
         @JsonProperty("occurredAt") Instant occurredAt,
         @JsonProperty("eventType") String eventType,
@@ -73,20 +85,14 @@ public class PdfGeneratedEvent extends IntegrationEvent {
         @JsonProperty("invoiceId") String invoiceId,
         @JsonProperty("invoiceNumber") String invoiceNumber,
         @JsonProperty("documentType") String documentType,
-        @JsonProperty("documentId") String documentId,
-        @JsonProperty("documentUrl") String documentUrl,
-        @JsonProperty("fileSize") Long fileSize,
-        @JsonProperty("xmlEmbedded") Boolean xmlEmbedded,
+        @JsonProperty("errorMessage") String errorMessage,
         @JsonProperty("correlationId") String correlationId
     ) {
         super(eventId, occurredAt, eventType, version);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
-        this.documentId = documentId;
-        this.documentUrl = documentUrl;
-        this.fileSize = fileSize;
-        this.xmlEmbedded = xmlEmbedded;
+        this.errorMessage = errorMessage;
         this.correlationId = correlationId;
     }
 }
