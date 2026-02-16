@@ -88,15 +88,18 @@ app:
   csc:
     service-url: ${CSC_SERVICE_URL:http://localhost:9000}
     auth-endpoint: /csc/v2/oauth2/authorize
-    sign-endpoint: /csc/v2/signatures/signDocument
+    sign-hash-endpoint: /csc/v2/signatures/signHash
     credential-id: ${CSC_CREDENTIAL_ID:default-credential}
-    signature-level: PAdES-BASELINE-T
-    signature-form: attached
-    digest-algorithm: SHA256
-    reason: Thai e-Tax Invoice Digital Signature
-    location: Thailand
-    contact-info: ${CSC_CONTACT_INFO:}
+    client-id: ${CSC_CLIENT_ID:pdf-signing-service}
+    hash-algo: SHA256
     timeout-seconds: 30
+
+  # PAdES configuration
+  pades:
+    # Conformance level: BASELINE_B, BASELINE_T, BASELINE_LT, BASELINE_LTA
+    level: ${PADES_LEVEL:BASELINE_B}
+
+  signing:
 
   signing:
     max-retries: ${SIGNING_MAX_RETRIES:3}
@@ -131,7 +134,7 @@ resilience4j:
         waitDurationInOpenState: 10s
         failureRateThreshold: 50
         eventConsumerBufferSize: 10
-      csc-api:
+      csc-sign-hash:
         registerHealthIndicator: true
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -145,7 +148,7 @@ resilience4j:
     instances:
       csc-auth:
         timeoutDuration: 5s
-      csc-api:
+      csc-sign-hash:
         timeoutDuration: 30s
 
 # Actuator configuration
