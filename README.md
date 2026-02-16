@@ -7,7 +7,7 @@ Microservice for digitally signing PDF documents using PAdES (PDF Advanced Elect
 The PDF Signing Service:
 
 - ✅ **Consumes** signing commands from saga orchestrator
-- ✅ **Signs** PDFs using PAdES-BASELINE-T format via CSC API v2.0
+- ✅ **Signs** PDFs using PAdES-BASELINE-B format via deferred signing (CSC API v2.0 signHash)
 - ✅ **Stores** signed PDFs to filesystem
 - ✅ **Publishes** saga replies to orchestrator (via outbox + Debezium CDC)
 - ✅ **Publishes** notification events to notification-service (observer pattern)
@@ -25,6 +25,8 @@ The PDF Signing Service:
 | Circuit Breaker | Resilience4j |
 | Database | PostgreSQL |
 | Message Broker | Apache Kafka |
+| PDF Processing | Apache PDFBox 3.0.6 |
+| Cryptography | BouncyCastle 1.83 |
 | Signing API | CSC API v2.0 (eidasremotesigning) |
 | Saga Library | saga-commons 1.0.0-SNAPSHOT |
 | Event Routing | Debezium CDC (outbox pattern) |
@@ -35,6 +37,7 @@ The PDF Signing Service:
 - **Transactional Outbox**: Reliable event publishing via Debezium CDC
 - **Dual-Publishing**: Saga replies (to orchestrator) + notifications (to observer)
 - **Domain-Driven Design**: Aggregate roots, value objects, repository pattern
+- **Deferred Signing**: PDF byte range digest computed locally, signature via CSC signHash
 
 ### Domain Model
 
@@ -51,6 +54,7 @@ PENDING → SIGNING → COMPLETED
 **Value Objects:**
 - `SignedPdfDocumentId` - UUID wrapper
 - `SigningStatus` - PENDING, SIGNING, COMPLETED, FAILED
+- `PadesLevel` - BASELINE_B, BASELINE_T, BASELINE_LT, BASELINE_LTA
 
 ## Saga Orchestration Flow
 
@@ -68,7 +72,13 @@ PENDING → SIGNING → COMPLETED
 │              │  (Spring Boot 3.2.5)        │               │
 │              └──────────────────────────────┘               │
 │                           │                                    │
-│                           ├── [PDF Signing via CSC API]            │
+│                           ├── [Deferred Signing Flow]            │
+│                           │  1. Download PDF                   │
+│                           │  2. Compute byte range digest       │
+│                           │  3. CSC authorize → SAD            │
+│                           │  4. CSC signHash (digest only)     │
+│                           │  5. Build CMS/PKCS#7 (BouncyCastle) │
+│                           │  6. Embed signature (PDFBox)       │
 │                           │                                    │
 │                           ▼                                    │
 │              ┌───────────────────────────────┐              │
@@ -140,7 +150,7 @@ PENDING → SIGNING → COMPLETED
   "signedPdfSize": 48234,
   "transactionId": "TXN-uuid",
   "certificate": "-----BEGIN CERTIFICATE-----...",
-  "signatureLevel": "PAdES-BASELINE-T",
+  "signatureLevel": "PAdES-BASELINE-B",
   "signatureTimestamp": "2025-01-29T10:31:00Z"
 }
 ```
@@ -154,7 +164,7 @@ PENDING → SIGNING → COMPLETED
   "signedDocumentId": "document-uuid",
   "signedPdfUrl": "http://localhost:8087/signed/...",
   "signedPdfSize": 48234,
-  "signatureLevel": "PAdES-BASELINE-T",
+  "signatureLevel": "PAdES-BASELINE-B",
   "signatureTimestamp": "2025-01-29T10:31:00Z",
   "correlationId": "correlation-uuid"
 }
@@ -173,10 +183,10 @@ PENDING → SIGNING → COMPLETED
 - `signed_pdf_path` (VARCHAR) - Filesystem path to signed PDF
 - `signed_pdf_url` (VARCHAR) - Public URL to access signed PDF
 - `signed_pdf_size` (BIGINT) - Signed PDF file size
-- `transaction_id` (VARCHAR) - CSC API transaction ID
+- `transaction_id` (VARCHAR) - CSC API transaction ID (SAD token)
 - `certificate` (TEXT) - PEM-encoded signing certificate
-- `signature_level` (VARCHAR) - Signature level (PAdES-BASELINE-T)
-- `signature_timestamp` (TIMESTAMP) - Signature timestamp from CSC API
+- `signature_level` (VARCHAR) - Signature level (PAdES-BASELINE-B)
+- `signature_timestamp` (TIMESTAMP) - Signature timestamp
 - `status` (VARCHAR) - PENDING, SIGNING, COMPLETED, FAILED
 - `error_message` (TEXT) - Error message if failed
 - `retry_count` (INTEGER) - Number of retry attempts
@@ -207,6 +217,8 @@ PENDING → SIGNING → COMPLETED
 | `KAFKA_BROKERS` | Kafka bootstrap servers | `localhost:9092` |
 | `CSC_SERVICE_URL` | eidasremotesigning URL | `http://localhost:9000` |
 | `CSC_CREDENTIAL_ID` | CSC credential ID | `default-credential` |
+| `CSC_CLIENT_ID` | CSC client ID | `pdf-signing-service` |
+| `PADES_LEVEL` | PAdES conformance level | `BASELINE_B` |
 | `SIGNED_PDF_STORAGE_PATH` | Storage path for signed PDFs | `/var/signed-documents` |
 | `SIGNED_PDF_STORAGE_BASE_URL` | Base URL for signed PDF access | `http://localhost:8087` |
 | `SIGNING_MAX_RETRIES` | Maximum retry attempts | `3` |
@@ -223,6 +235,16 @@ app:
       saga-reply: saga.reply.pdf-signing
       notification-events: notification.events
       dlq: pdf.signing.dlq
+
+  csc:
+    service-url: http://localhost:9000
+    auth-endpoint: /csc/v2/oauth2/authorize
+    sign-hash-endpoint: /csc/v2/signatures/signHash
+    credential-id: default-credential
+    hash-algo: SHA256
+
+  pades:
+    level: BASELINE_B
 
 saga:
   outbox:
@@ -265,10 +287,10 @@ mvn spring-boot:run
 ### Run Tests
 
 ```bash
-# Run all tests (11 unit tests for saga components)
+# Run all tests (18 unit tests)
 mvn test
 
-# Run with coverage
+# Run with coverage (JaCoCo 90% requirement)
 mvn verify
 ```
 
@@ -303,7 +325,7 @@ See `debezium/DEBEZIUM_SETUP.md` for complete Debezium setup documentation.
 src/main/java/com/wpanther/pdfsigning/
 ├── PdfSigningServiceApplication.java
 ├── domain/
-│   ├── model/              # SignedPdfDocument aggregate, value objects
+│   ├── model/              # SignedPdfDocument aggregate, PadesLevel enum
 │   ├── repository/         # Repository interfaces
 │   ├── service/            # PdfSigningService interface
 │   └── event/              # Saga commands, replies, notifications
@@ -313,7 +335,9 @@ src/main/java/com/wpanther/pdfsigning/
     ├── persistence/        # JPA entities, repositories
     │   └── outbox/         # Outbox pattern (CDC source)
     ├── client/             # CSC API Feign clients
+    │   └── csc/            # CSC API DTOs
     ├── messaging/          # Event publishers (outbox)
+    ├── pdf/                # PadesSignatureEmbedder, CertificateParser
     └── config/             # SagaRouteConfig, Feign, etc.
 ```
 
@@ -339,7 +363,7 @@ src/main/java/com/wpanther/pdfsigning/
 
 ### Retry Logic
 - Failed signings retried up to 3 times
-- Exponential backoff for delays
+- Configurable retry delay
 
 ### Circuit Breaker
 - Resilience4j circuit breaker protects CSC API calls
@@ -349,10 +373,37 @@ src/main/java/com/wpanther/pdfsigning/
 - Dead Letter Channel with exponential backoff
 - Failed events routed to DLQ topic
 
-## CSC API Integration
+## CSC API Integration (Deferred Signing)
 
-1. **Authorization**: `POST /csc/v2/oauth2/authorize` → SAD token
-2. **Signing**: `POST /csc/v2/signatures/signDocument` → signed PDF (PAdES-BASELINE-T)
+The service uses **deferred signing** via the CSC `signHash` endpoint:
+
+1. **Download PDF** from PDF generation service
+2. **Compute byte range digest** locally (Apache PDFBox 3.0.6)
+3. **Authorize** with CSC API → SAD token
+4. **Sign hash** via `POST /csc/v2/signatures/signHash` → raw signature
+5. **Build CMS/PKCS#7** signature locally (BouncyCastle 1.83)
+6. **Embed signature** into PDF locally (Apache PDFBox 3.0.6)
+
+**PAdES Signed Attributes** (per ETSI EN 319 142-1):
+- `contentType` (id-data)
+- `messageDigest` (SHA-256 of byte range)
+- `signingTime` (timestamp)
+- `signingCertificateV2` (certificate hash)
+
+**SubFilter:** `ETSI.CAdES.detached`
+
+## PAdES Conformance Levels
+
+| Level | Description | TSA | OCSP/CRL |
+|-------|-------------|-----|----------|
+| BASELINE_B | Basic signature | No | No |
+| BASELINE_T | With timestamp | Yes | No |
+| BASELINE_LT | Long-term validation | Yes | Yes |
+| BASELINE_LTA | Archive timestamp | Yes | Yes + Archive |
+
+**Current:** `BASELINE_B` (minimum for Revenue Department compliance)
+
+Future enhancements can add TSA/OCSP support for higher PAdES levels.
 
 ## Actuator Endpoints
 
