@@ -100,14 +100,22 @@ app:
     level: ${PADES_LEVEL:BASELINE_B}
 
   signing:
-
-  signing:
     max-retries: ${SIGNING_MAX_RETRIES:3}
     retry-delay-seconds: ${SIGNING_RETRY_DELAY:5}
 
   storage:
-    base-path: ${SIGNED_PDF_STORAGE_PATH:/var/signed-documents}
-    base-url: ${SIGNED_PDF_STORAGE_BASE_URL:http://localhost:8087}
+    provider: ${STORAGE_PROVIDER:local}
+    local:
+      base-path: ${SIGNED_PDF_STORAGE_PATH:/var/signed-documents}
+      base-url: ${SIGNED_PDF_STORAGE_BASE_URL:http://localhost:8087}
+    s3:
+      bucket-name: ${S3_BUCKET_NAME:etax-signed-pdfs}
+      region: ${AWS_REGION:us-east-1}
+      access-key: ${AWS_ACCESS_KEY:minioadmin}
+      secret-key: ${AWS_SECRET_KEY:minioadmin}
+      endpoint: ${S3_ENDPOINT:http://localhost:9100}
+      path-style-access: ${S3_PATH_STYLE_ACCESS:true}
+      base-url: ${S3_BASE_URL:http://localhost:9100/etax-signed-pdfs}
 
 # Saga-commons configuration (outbox pattern)
 saga:

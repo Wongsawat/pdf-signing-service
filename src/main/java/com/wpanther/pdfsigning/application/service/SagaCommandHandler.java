@@ -5,6 +5,7 @@ import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.PdfSigningService;
+import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,8 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Optional;
 
 /**
@@ -28,6 +27,7 @@ public class SagaCommandHandler {
 
     private final SignedPdfDocumentRepository documentRepository;
     private final PdfSigningService signingService;
+    private final SignedPdfStorageProvider storageProvider;
     private final PdfSigningEventPublisher eventPublisher;  // Combined publisher
 
     @Value("${app.signing.max-retries:3}")
@@ -163,17 +163,14 @@ public class SagaCommandHandler {
             if (existing.isPresent()) {
                 SignedPdfDocument document = existing.get();
 
-                // Delete signed PDF file from filesystem
+                // Delete signed PDF from storage
                 try {
                     if (document.getSignedPdfPath() != null) {
-                        Path filePath = Path.of(document.getSignedPdfPath());
-                        if (Files.exists(filePath)) {
-                            Files.delete(filePath);
-                            log.info("Deleted signed PDF file: {}", document.getSignedPdfPath());
-                        }
+                        storageProvider.delete(document.getSignedPdfPath());
+                        log.info("Deleted signed PDF: {}", document.getSignedPdfPath());
                     }
                 } catch (Exception e) {
-                    log.warn("Failed to delete signed PDF file: {}", document.getSignedPdfPath(), e);
+                    log.warn("Failed to delete signed PDF: {}", document.getSignedPdfPath(), e);
                 }
 
                 // Delete from database

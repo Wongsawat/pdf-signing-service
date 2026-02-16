@@ -1,6 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.client;
 
 import com.wpanther.pdfsigning.domain.service.PdfSigningService;
+import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCAuthClient;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeRequest;
@@ -16,9 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.ByteArrayInputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -44,6 +42,7 @@ public class PdfSigningServiceImpl implements PdfSigningService {
     private final CSCApiClient apiClient;
     private final PadesSignatureEmbedder signatureEmbedder;
     private final CertificateParser certificateParser;
+    private final SignedPdfStorageProvider storageProvider;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${app.csc.client-id:#{null}}")
@@ -54,12 +53,6 @@ public class PdfSigningServiceImpl implements PdfSigningService {
 
     @Value("${app.csc.hash-algo:SHA256}")
     private String hashAlgo;
-
-    @Value("${app.storage.base-path}")
-    private String storagePath;
-
-    @Value("${app.storage.base-url}")
-    private String baseUrl;
 
     @Value("${app.pades.level:BASELINE_B}")
     private String padesLevel;
@@ -132,15 +125,14 @@ public class PdfSigningServiceImpl implements PdfSigningService {
             byte[] signedPdf = signatureEmbedder.embedSignature(pdfContent, cmsSignature);
             log.debug("Embedded signature, signed PDF size: {} bytes", signedPdf.length);
 
-            // Step 8: Save to filesystem
-            String filePath = saveSignedPdf(signedPdf, documentId);
-            String fileUrl = generateFileUrl(filePath);
-            log.info("Saved signed PDF to: {}", filePath);
+            // Step 8: Store signed PDF
+            SignedPdfStorageProvider.StorageResult storageResult = storageProvider.store(signedPdf, documentId);
+            log.info("Stored signed PDF: path={}, url={}", storageResult.path(), storageResult.url());
 
             // Step 9: Build result
             return SignedPdfResult.builder()
-                .signedPdfPath(filePath)
-                .signedPdfUrl(fileUrl)
+                .signedPdfPath(storageResult.path())
+                .signedPdfUrl(storageResult.url())
                 .signedPdfSize((long) signedPdf.length)
                 .transactionId(authResponse.getSAD()) // Use SAD as transaction ID
                 .certificate(signResponse.getCertificate())
@@ -165,37 +157,4 @@ public class PdfSigningServiceImpl implements PdfSigningService {
         }
     }
 
-    /**
-     * Saves the signed PDF to the filesystem.
-     *
-     * File structure: {storagePath}/YYYY/MM/DD/signed-pdf-{documentId}.pdf
-     */
-    private String saveSignedPdf(byte[] signedPdf, String documentId) {
-        try {
-            LocalDateTime now = LocalDateTime.now();
-            String year = String.format("%04d", now.getYear());
-            String month = String.format("%02d", now.getMonthValue());
-            String day = String.format("%02d", now.getDayOfMonth());
-
-            Path directory = Paths.get(storagePath, year, month, day);
-            Files.createDirectories(directory);
-
-            String filename = String.format("signed-pdf-%s.pdf", documentId);
-            Path filePath = directory.resolve(filename);
-
-            Files.write(filePath, signedPdf);
-
-            return filePath.toString();
-        } catch (Exception e) {
-            throw new PdfSigningException("Failed to save signed PDF to filesystem", e);
-        }
-    }
-
-    /**
-     * Generates the public URL for the signed PDF.
-     */
-    private String generateFileUrl(String filePath) {
-        String relativePath = filePath.substring(storagePath.length());
-        return baseUrl + "/signed-documents" + relativePath.replace("\\", "/");
-    }
 }

@@ -6,6 +6,7 @@ import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.PdfSigningService;
+import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class SagaCommandHandlerTest {
 
     @Mock
     private PdfSigningService signingService;
+
+    @Mock
+    private SignedPdfStorageProvider storageProvider;
 
     @Mock
     private PdfSigningEventPublisher eventPublisher;
