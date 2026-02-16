@@ -69,7 +69,7 @@ PENDING → SIGNING → COMPLETED
 │                           ▼                                    │
 │              ┌──────────────────────────────┐               │
 │              │  pdf-signing-service        │               │
-│              │  (Spring Boot 3.2.5)        │               │
+│              │  (Spring Boot 3.4.13)       │               │
 │              └──────────────────────────────┘               │
 │                           │                                    │
 │                           ├── [Deferred Signing Flow]            │
