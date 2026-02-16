@@ -19,7 +19,7 @@ The PDF Signing Service:
 | Component | Technology |
 |-----------|------------|
 | Language | Java 21 |
-| Framework | Spring Boot 3.2.5 |
+| Framework | Spring Boot 3.4.1 |
 | Messaging | Apache Camel 4.14.4 |
 | HTTP Client | Spring Cloud OpenFeign |
 | Circuit Breaker | Resilience4j |
