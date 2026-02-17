@@ -94,6 +94,7 @@ public class PdfSigningServiceImpl implements PdfSigningService {
             CSCSignatureRequest signRequest = CSCSignatureRequest.builder()
                 .clientId(clientId)
                 .credentialID(credentialId)
+                .SAD(authResponse.getSAD())
                 .hashAlgo(hashAlgo)
                 .signatureData(CSCSignatureRequest.SignatureData.builder()
                     .hashToSign(new String[]{base64urlHash})

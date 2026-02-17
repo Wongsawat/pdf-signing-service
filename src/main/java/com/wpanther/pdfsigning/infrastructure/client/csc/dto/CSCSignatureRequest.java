@@ -39,6 +39,13 @@ public class CSCSignatureRequest {
     private String credentialID;
 
     /**
+     * SAD (Signature Activation Data) token for authorization.
+     * Obtained from CSC /credentials/authorize endpoint.
+     */
+    @JsonProperty("SAD")
+    private String SAD;
+
+    /**
      * Hash algorithm used for digest computation.
      * Supported values: SHA256, SHA384, SHA512
      */
