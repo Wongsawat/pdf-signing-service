@@ -35,7 +35,7 @@ public class CSCAuthorizeRequest {
      * Number of signatures to authorize
      */
     @JsonProperty("numSignatures")
-    private Integer numSignatures;
+    private String numSignatures;
 
     /**
      * Hash algorithm for the digest (e.g., "SHA256")

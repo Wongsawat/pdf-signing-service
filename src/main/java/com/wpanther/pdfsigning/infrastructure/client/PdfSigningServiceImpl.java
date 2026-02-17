@@ -80,7 +80,7 @@ public class PdfSigningServiceImpl implements PdfSigningService {
                 CSCAuthorizeRequest.builder()
                     .clientId(clientId)
                     .credentialID(credentialId)
-                    .numSignatures(1)
+                    .numSignatures("1")
                     .hashAlgo(hashAlgo)
                     .hash(new String[]{Base64.getEncoder().encodeToString(digest)})
                     .description("Thai e-Tax Invoice PDF Signing - " + documentId)
