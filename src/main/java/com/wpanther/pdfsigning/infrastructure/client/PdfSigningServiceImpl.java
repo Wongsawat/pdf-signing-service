@@ -78,8 +78,10 @@ public class PdfSigningServiceImpl implements PdfSigningService {
             log.debug("Authorizing signing operation with CSC API");
             CSCAuthorizeResponse authResponse = authClient.authorize(
                 CSCAuthorizeRequest.builder()
+                    .clientId(clientId)
                     .credentialID(credentialId)
                     .numSignatures(1)
+                    .hashAlgo(hashAlgo)
                     .hash(new String[]{Base64.getEncoder().encodeToString(digest)})
                     .description("Thai e-Tax Invoice PDF Signing - " + documentId)
                     .build()

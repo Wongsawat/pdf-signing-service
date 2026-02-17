@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.client.csc.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +16,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class CSCAuthorizeRequest {
+
+    /**
+     * Client identifier for CSC authentication.
+     */
+    @JsonProperty("clientId")
+    private String clientId;
 
     /**
      * Credential identifier
@@ -27,8 +35,13 @@ public class CSCAuthorizeRequest {
      * Number of signatures to authorize
      */
     @JsonProperty("numSignatures")
-    @Builder.Default
-    private Integer numSignatures = 1;
+    private Integer numSignatures;
+
+    /**
+     * Hash algorithm for the digest (e.g., "SHA256")
+     */
+    @JsonProperty("hashAlgo")
+    private String hashAlgo;
 
     /**
      * Hash array for the documents to be signed (Base64-encoded)
