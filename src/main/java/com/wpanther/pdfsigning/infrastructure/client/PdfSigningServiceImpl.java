@@ -76,13 +76,15 @@ public class PdfSigningServiceImpl implements PdfSigningService {
 
             // Step 3: Authorize with CSC API
             log.debug("Authorizing signing operation with CSC API");
+            // Use base64url encoding (URL-safe, no padding) for authorize request hash
+            String base64urlDigest = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
             CSCAuthorizeResponse authResponse = authClient.authorize(
                 CSCAuthorizeRequest.builder()
                     .clientId(clientId)
                     .credentialID(credentialId)
                     .numSignatures("1")
                     .hashAlgo(hashAlgo)
-                    .hash(new String[]{Base64.getEncoder().encodeToString(digest)})
+                    .hash(new String[]{base64urlDigest})
                     .description("Thai e-Tax Invoice PDF Signing - " + documentId)
                     .build()
             );
