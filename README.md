@@ -8,7 +8,7 @@ The PDF Signing Service:
 
 - ✅ **Consumes** signing commands from saga orchestrator
 - ✅ **Signs** PDFs using PAdES-BASELINE-B format via deferred signing (CSC API v2.0 signHash)
-- ✅ **Stores** signed PDFs to filesystem
+- ✅ **Stores** signed PDFs to local filesystem or S3/MinIO (pluggable storage)
 - ✅ **Publishes** saga replies to orchestrator (via outbox + Debezium CDC)
 - ✅ **Publishes** notification events to notification-service (observer pattern)
 
@@ -219,8 +219,16 @@ PENDING → SIGNING → COMPLETED
 | `CSC_CREDENTIAL_ID` | CSC credential ID | `default-credential` |
 | `CSC_CLIENT_ID` | CSC client ID | `pdf-signing-service` |
 | `PADES_LEVEL` | PAdES conformance level | `BASELINE_B` |
-| `SIGNED_PDF_STORAGE_PATH` | Storage path for signed PDFs | `/var/signed-documents` |
-| `SIGNED_PDF_STORAGE_BASE_URL` | Base URL for signed PDF access | `http://localhost:8087` |
+| `STORAGE_PROVIDER` | Storage backend (`local` or `s3`) | `local` |
+| `SIGNED_PDF_STORAGE_PATH` | Local storage path for signed PDFs | `/var/signed-documents` |
+| `SIGNED_PDF_STORAGE_BASE_URL` | Base URL for signed PDF access (local) | `http://localhost:8087` |
+| `S3_BUCKET_NAME` | S3/MinIO bucket name | `etax-signed-pdfs` |
+| `AWS_REGION` | AWS region | `us-east-1` |
+| `AWS_ACCESS_KEY` | S3/MinIO access key | `minioadmin` |
+| `AWS_SECRET_KEY` | S3/MinIO secret key | `minioadmin` |
+| `S3_ENDPOINT` | Custom S3/MinIO endpoint | `http://localhost:9100` |
+| `S3_PATH_STYLE_ACCESS` | Force path-style S3 access | `true` |
+| `S3_BASE_URL` | Public S3 base URL | `http://localhost:9100/etax-signed-pdfs` |
 | `SIGNING_MAX_RETRIES` | Maximum retry attempts | `3` |
 | `OUTBOX_CLEANUP_ENABLED` | Enable outbox cleanup job | `false` |
 
@@ -254,6 +262,51 @@ saga:
       retention-hours: 24
 ```
 
+## Storage Providers
+
+The service supports pluggable storage backends via the `STORAGE_PROVIDER` environment variable.
+
+### Local Storage (Default)
+
+Stores signed PDFs on the local filesystem with date-based directory structure:
+
+```
+{SIGNED_PDF_STORAGE_PATH}/YYYY/MM/DD/signed-pdf-{documentId}.pdf
+```
+
+**Configuration:**
+```bash
+export STORAGE_PROVIDER=local
+export SIGNED_PDF_STORAGE_PATH=/var/signed-documents
+export SIGNED_PDF_STORAGE_BASE_URL=http://localhost:8087
+```
+
+**Public URL format:** `http://localhost:8087/signed-documents/YYYY/MM/DD/signed-pdf-{documentId}.pdf`
+
+### S3/MinIO Storage
+
+Stores signed PDFs in S3 or MinIO with date-based key structure:
+
+```
+signed-pdfs/YYYY/MM/DD/signed-pdf-{documentId}.pdf
+```
+
+**Configuration:**
+```bash
+export STORAGE_PROVIDER=s3
+export S3_BUCKET_NAME=etax-signed-pdfs
+export AWS_REGION=us-east-1
+export AWS_ACCESS_KEY=minioadmin
+export AWS_SECRET_KEY=minioadmin
+export S3_ENDPOINT=http://localhost:9100
+export S3_PATH_STYLE_ACCESS=true
+export S3_BASE_URL=http://localhost:9100/etax-signed-pdfs
+```
+
+**Public URL format:** `http://localhost:9100/etax-signed-pdfs/signed-pdfs/YYYY/MM/DD/signed-pdf-{documentId}.pdf`
+
+> **Note:** The `S3_ENDPOINT` and `S3_PATH_STYLE_ACCESS` settings are typically used for MinIO or S3-compatible services. For AWS S3, these can be omitted.
+
 ## Running the Service
 
 ### Prerequisites
@@ -263,7 +316,9 @@ saga:
 3. **eidasremotesigning service** (CSC API v2.0) on `localhost:9000`
 4. **saga-commons** library installed: `cd /home/wpanther/projects/etax/saga-commons && mvn clean install`
 5. **Debezium CDC** connector registered (for outbox event routing)
-6. Storage directory with write permissions
+6. **Storage backend**:
+   - **Local**: Directory with write permissions (e.g., `/var/signed-documents`)
+   - **S3/MinIO**: S3 bucket or MinIO instance accessible from the service
 
 ### Build
 
@@ -273,13 +328,33 @@ mvn clean package
 
 ### Run Locally
 
+**With local storage (default):**
 ```bash
 export DB_HOST=localhost
 export KAFKA_BROKERS=localhost:9092
 export CSC_SERVICE_URL=http://localhost:9000
+export STORAGE_PROVIDER=local
 export SIGNED_PDF_STORAGE_PATH=/var/signed-documents
+export SIGNED_PDF_STORAGE_BASE_URL=http://localhost:8087
 
 mkdir -p /var/signed-documents
+
+mvn spring-boot:run
+```
+
+**With S3/MinIO storage:**
+```bash
+export DB_HOST=localhost
+export KAFKA_BROKERS=localhost:9092
+export CSC_SERVICE_URL=http://localhost:9000
+export STORAGE_PROVIDER=s3
+export S3_BUCKET_NAME=etax-signed-pdfs
+export AWS_REGION=us-east-1
+export AWS_ACCESS_KEY=minioadmin
+export AWS_SECRET_KEY=minioadmin
+export S3_ENDPOINT=http://localhost:9100
+export S3_PATH_STYLE_ACCESS=true
+export S3_BASE_URL=http://localhost:9100/etax-signed-pdfs
 
 mvn spring-boot:run
 ```
@@ -327,7 +402,7 @@ src/main/java/com/wpanther/pdfsigning/
 ├── domain/
 │   ├── model/              # SignedPdfDocument aggregate, PadesLevel enum
 │   ├── repository/         # Repository interfaces
-│   ├── service/            # PdfSigningService interface
+│   ├── service/            # PdfSigningService, SignedPdfStorageProvider
 │   └── event/              # Saga commands, replies, notifications
 ├── application/
 │   └── service/            # SagaCommandHandler (process + compensate)
@@ -338,10 +413,17 @@ src/main/java/com/wpanther/pdfsigning/
     │   └── csc/            # CSC API DTOs
     ├── messaging/          # Event publishers (outbox)
     ├── pdf/                # PadesSignatureEmbedder, CertificateParser
+    ├── storage/            # LocalSignedPdfStorageProvider, S3SignedPdfStorageProvider
     └── config/             # SagaRouteConfig, Feign, etc.
 ```
 
 ## Key Features
+
+### Pluggable Storage Backends
+- Local filesystem storage (default) with date-based directory structure
+- AWS S3 or MinIO storage support
+- Runtime selection via `STORAGE_PROVIDER` environment variable
+- Consistent `StorageResult` interface across providers
 
 ### Saga Orchestration
 - Command/reply pattern with saga orchestrator
