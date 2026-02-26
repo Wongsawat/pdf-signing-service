@@ -128,7 +128,12 @@ app:
       secret-key: ${AWS_SECRET_KEY:minioadmin}
       endpoint: ${S3_ENDPOINT:http://localhost:9100}
       path-style-access: ${S3_PATH_STYLE_ACCESS:true}
-      base-url: ${S3_BASE_URL:http://localhost:9100/etax-signed-pdfs}
+      # Pre-signed URL expiration in seconds (default: 1 hour)
+      presigned-url-expiration-seconds: ${S3_PRESIGNED_URL_EXPIRATION_SECONDS:3600}
+
+  # PDF size validation
+  pdf:
+    max-size-bytes: ${PDF_MAX_SIZE_BYTES:104857600}  # 100MB default
 
 # Saga-commons configuration (outbox pattern)
 saga:

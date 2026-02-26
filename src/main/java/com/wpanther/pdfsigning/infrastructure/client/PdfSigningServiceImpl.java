@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.client;
 
+import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.service.PdfSigningService;
 import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
@@ -22,6 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.UUID;
 
 /**
  * Implementation of PdfSigningService using deferred signing (signHash).
@@ -59,17 +61,22 @@ public class PdfSigningServiceImpl implements PdfSigningService {
     private String hashAlgo;
 
     @Value("${app.pades.level:BASELINE_B}")
-    private String padesLevel;
+    private String padesLevelConfig;
+
+    @Value("${app.pdf.max-size-bytes:104857600}") // 100MB default
+    private long maxPdfSizeBytes;
 
     @Override
     public SignedPdfResult signPdf(String pdfUrl, String documentId) {
+        // Generate request ID for distributed tracing
+        String requestId = UUID.randomUUID().toString();
         try {
-            log.info("Starting deferred PDF signing for document: {}", documentId);
+            log.info("Starting deferred PDF signing for document: {} (requestId: {})", documentId, requestId);
 
-            // Step 1: Download PDF from URL
-            log.debug("Downloading PDF from URL: {}", pdfUrl);
-            byte[] pdfContent = downloadPdf(pdfUrl);
-            log.debug("Downloaded PDF size: {} bytes", pdfContent.length);
+            // Step 1: Download PDF from URL (with size validation)
+            log.debug("Downloading PDF from URL: {} (requestId: {})", pdfUrl, requestId);
+            byte[] pdfContent = downloadPdfWithValidation(pdfUrl, requestId);
+            log.debug("Downloaded PDF size: {} bytes (requestId: {})", pdfContent.length, requestId);
 
             // Step 2: Compute byte range digest using PDFBox
             log.debug("Computing PDF byte range digest");
@@ -146,31 +153,71 @@ public class PdfSigningServiceImpl implements PdfSigningService {
             SignedPdfStorageProvider.StorageResult storageResult = storageProvider.store(signedPdf, documentId);
             log.info("Stored signed PDF: path={}, url={}", storageResult.path(), storageResult.url());
 
-            // Step 9: Build result
+            // Step 9: Build result with parsed PAdES level
+            PadesLevel padesLevel = PadesLevel.fromCode("PAdES-" + padesLevelConfig);
+            log.info("PDF signing completed with level: {} (requestId: {})", padesLevel.getCode(), requestId);
+
             return SignedPdfResult.builder()
                 .signedPdfPath(storageResult.path())
                 .signedPdfUrl(storageResult.url())
                 .signedPdfSize((long) signedPdf.length)
                 .transactionId(authResponse.getSAD()) // Use SAD as transaction ID
                 .certificate(signResponse.getCertificate())
-                .signatureLevel("PAdES-" + padesLevel)
+                .signatureLevel(padesLevel.getCode())
                 .signatureTimestamp(LocalDateTime.now())
                 .build();
 
         } catch (Exception e) {
-            log.error("Failed to sign PDF for document: {}", documentId, e);
+            log.error("Failed to sign PDF for document: {} (requestId: {})", documentId, requestId, e);
             throw new PdfSigningException("Failed to sign PDF: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Downloads PDF content from the given URL.
+     * Downloads PDF content from the given URL with size validation.
+     *
+     * @param pdfUrl URL to download from
+     * @param requestId Request ID for tracing
+     * @return PDF content bytes
+     * @throws PdfSigningException if download fails or file is too large
      */
-    private byte[] downloadPdf(String pdfUrl) {
+    byte[] downloadPdfWithValidation(String pdfUrl, String requestId) {
         try {
-            return restTemplate.getForObject(pdfUrl, byte[].class);
+            // First, check content length if available (HEAD request)
+            try {
+                var headResponse = restTemplate.headForHeaders(pdfUrl);
+                Long contentLength = headResponse.getContentLength();
+                if (contentLength != null && contentLength > maxPdfSizeBytes) {
+                    throw new PdfSigningException(
+                        "PDF file exceeds maximum size: " + contentLength + " bytes (max: " + maxPdfSizeBytes + " bytes)"
+                    );
+                }
+                log.debug("Content-Length header: {} bytes (requestId: {})", contentLength, requestId);
+            } catch (Exception e) {
+                log.debug("Could not check Content-Length header, proceeding with download: {}", e.getMessage());
+            }
+
+            // Download PDF
+            byte[] content = restTemplate.getForObject(pdfUrl, byte[].class);
+
+            // Validate downloaded size
+            if (content == null) {
+                throw new PdfSigningException("Received null content from URL: " + pdfUrl);
+            }
+
+            if (content.length > maxPdfSizeBytes) {
+                throw new PdfSigningException(
+                    "Downloaded PDF exceeds maximum size: " + content.length + " bytes (max: " + maxPdfSizeBytes + " bytes)"
+                );
+            }
+
+            log.debug("Validated PDF size: {} bytes (requestId: {})", content.length, requestId);
+            return content;
+
+        } catch (PdfSigningException e) {
+            throw e;
         } catch (Exception e) {
-            throw new PdfSigningException("Failed to download PDF from URL: " + pdfUrl, e);
+            throw new PdfSigningException("Failed to download PDF from URL: " + pdfUrl + " (requestId: " + requestId + ")", e);
         }
     }
 

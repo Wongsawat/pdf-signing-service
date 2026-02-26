@@ -11,10 +11,14 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.net.URI;
+import java.time.Duration;
 import java.time.LocalDate;
 
 /**
@@ -27,40 +31,49 @@ import java.time.LocalDate;
 public class S3SignedPdfStorageProvider implements SignedPdfStorageProvider {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
     private final String bucketName;
-    private final String baseUrl;
+    private final Duration presignedUrlExpiration;
 
     public S3SignedPdfStorageProvider(
         @Value("${app.storage.s3.bucket-name}") String bucketName,
         @Value("${app.storage.s3.region}") String region,
         @Value("${app.storage.s3.access-key}") String accessKey,
         @Value("${app.storage.s3.secret-key}") String secretKey,
-        @Value("${app.storage.s3.base-url}") String baseUrl,
         @Value("${app.storage.s3.endpoint:}") String endpoint,
-        @Value("${app.storage.s3.path-style-access:false}") boolean pathStyleAccess
+        @Value("${app.storage.s3.path-style-access:false}") boolean pathStyleAccess,
+        @Value("${app.storage.s3.presigned-url-expiration-seconds:3600}") long presignedUrlExpirationSeconds
     ) {
         this.bucketName = bucketName;
-        this.baseUrl = baseUrl;
+        this.presignedUrlExpiration = Duration.ofSeconds(presignedUrlExpirationSeconds);
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
-        var builder = S3Client.builder()
+        var s3Builder = S3Client.builder()
+            .region(Region.of(region))
+            .credentialsProvider(StaticCredentialsProvider.create(credentials));
+
+        var presignerBuilder = S3Presigner.builder()
             .region(Region.of(region))
             .credentialsProvider(StaticCredentialsProvider.create(credentials));
 
         if (endpoint != null && !endpoint.isEmpty()) {
-            builder.endpointOverride(URI.create(endpoint));
+            s3Builder.endpointOverride(URI.create(endpoint));
+            presignerBuilder.endpointOverride(URI.create(endpoint));
             log.info("Using custom S3 endpoint: {}", endpoint);
         }
 
         if (pathStyleAccess) {
-            builder.forcePathStyle(true);
+            s3Builder.forcePathStyle(true);
+            presignerBuilder.serviceConfiguration(builder -> builder
+                .pathStyleAccessEnabled(true));
             log.info("Using path-style access for S3");
         }
 
-        this.s3Client = builder.build();
+        this.s3Client = s3Builder.build();
+        this.s3Presigner = presignerBuilder.build();
 
-        log.info("Initialized S3 signed PDF storage: bucket={}, region={}, endpoint={}",
-            bucketName, region, endpoint != null && !endpoint.isEmpty() ? endpoint : "AWS");
+        log.info("Initialized S3 signed PDF storage: bucket={}, region={}, endpoint={}, presignedUrlExpiration={}s",
+            bucketName, region, endpoint != null && !endpoint.isEmpty() ? endpoint : "AWS", presignedUrlExpirationSeconds);
     }
 
     @Override
@@ -77,10 +90,11 @@ public class S3SignedPdfStorageProvider implements SignedPdfStorageProvider {
 
             s3Client.putObject(putObjectRequest, RequestBody.fromBytes(signedPdf));
 
-            String url = baseUrl + "/" + key;
+            // Generate pre-signed URL for secure access
+            String presignedUrl = generatePresignedUrl(key);
             log.info("Stored signed PDF in S3: bucket={}, key={}, size={} bytes", bucketName, key, signedPdf.length);
 
-            return new StorageResult(key, url);
+            return new StorageResult(key, presignedUrl);
 
         } catch (S3Exception e) {
             log.error("Failed to store signed PDF in S3: documentId={}", documentId, e);
@@ -112,5 +126,25 @@ public class S3SignedPdfStorageProvider implements SignedPdfStorageProvider {
         LocalDate now = LocalDate.now();
         return String.format("signed-pdfs/%04d/%02d/%02d/signed-pdf-%s.pdf",
             now.getYear(), now.getMonthValue(), now.getDayOfMonth(), documentId);
+    }
+
+    /**
+     * Generates a pre-signed URL for secure S3 object access.
+     * Pre-signed URLs are temporary and include expiration, providing better security
+     * than manually constructed URLs.
+     *
+     * @param key The S3 object key
+     * @return Pre-signed URL string
+     */
+    private String generatePresignedUrl(String key) {
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+            .signatureDuration(presignedUrlExpiration)
+            .getObjectRequest(GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build())
+            .build();
+
+        return s3Presigner.presign(presignRequest).url().toString();
     }
 }
