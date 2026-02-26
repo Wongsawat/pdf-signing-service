@@ -1,10 +1,9 @@
 package com.wpanther.pdfsigning.infrastructure.pdf;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.security.cert.X509Certificate;
@@ -17,59 +16,127 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * Tests parsing of PEM-encoded certificate chains from CSC responses.
  */
-@ExtendWith(MockitoExtension.class)
 @DisplayName("CertificateParser Tests")
 class CertificateParserTest {
 
-    @InjectMocks
     private CertificateParser certificateParser;
 
-    @Test
-    @DisplayName("Should throw exception for empty PEM data")
-    void shouldThrowExceptionForEmptyPemData() {
-        // Given
-        String emptyPem = "";
-
-        // When/Then
-        assertThatThrownBy(() -> certificateParser.parseCertificateChain(emptyPem))
-            .isInstanceOf(IOException.class)
-            .hasMessageContaining("No certificates found");
+    @BeforeEach
+    void setUp() {
+        certificateParser = new CertificateParser();
     }
 
-    @Test
-    @DisplayName("Should throw exception for invalid PEM data")
-    void shouldThrowExceptionForInvalidPemData() {
-        // Given
-        String invalidPem = "Not a valid PEM certificate";
+    @Nested
+    @DisplayName("parseCertificateChain() method")
+    class ParseCertificateChainMethod {
 
-        // When/Then
-        assertThatThrownBy(() -> certificateParser.parseCertificateChain(invalidPem))
-            .isInstanceOf(IOException.class);
+        @Test
+        @DisplayName("Should throw exception for empty PEM data")
+        void shouldThrowExceptionForEmptyPemData() {
+            // Given
+            String emptyPem = "";
+
+            // When/Then
+            assertThatThrownBy(() -> certificateParser.parseCertificateChain(emptyPem))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("No certificates found");
+        }
+
+        @Test
+        @DisplayName("Should throw exception for invalid PEM data")
+        void shouldThrowExceptionForInvalidPemData() {
+            // Given
+            String invalidPem = "Not a valid PEM certificate";
+
+            // When/Then
+            assertThatThrownBy(() -> certificateParser.parseCertificateChain(invalidPem))
+                .isInstanceOf(IOException.class);
+        }
+
+        @Test
+        @DisplayName("Should throw exception for null input")
+        void shouldThrowExceptionForNullInput() {
+            // When/Then - implementation throws NPE for null
+            assertThatThrownBy(() -> certificateParser.parseCertificateChain(null))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("Should throw exception for PEM without certificate content")
+        void shouldThrowExceptionForPemWithoutCertificate() {
+            // Given - valid PEM wrapper but no actual certificate
+            String pemWithoutCert = "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----";
+
+            // When/Then
+            assertThatThrownBy(() -> certificateParser.parseCertificateChain(pemWithoutCert))
+                .isInstanceOf(IOException.class);
+                // The error message varies, just check exception type
+        }
     }
 
-    @Test
-    @DisplayName("Should return null for signing certificate from empty chain")
-    void shouldReturnNullForSigningCertificateFromEmptyChain() {
-        // Given
-        X509Certificate[] emptyChain = new X509Certificate[0];
+    @Nested
+    @DisplayName("getSigningCertificate() method")
+    class GetSigningCertificateMethod {
 
-        // When
-        X509Certificate signingCert = certificateParser.getSigningCertificate(emptyChain);
+        @Test
+        @DisplayName("Should return null for empty chain")
+        void shouldReturnNullForEmptyChain() {
+            // Given
+            X509Certificate[] emptyChain = new X509Certificate[0];
 
-        // Then
-        assertThat(signingCert).isNull();
+            // When
+            X509Certificate signingCert = certificateParser.getSigningCertificate(emptyChain);
+
+            // Then
+            assertThat(signingCert).isNull();
+        }
+
+        @Test
+        @DisplayName("Should throw exception for null chain")
+        void shouldThrowExceptionForNullChain() {
+            // When/Then - implementation throws NPE for null
+            assertThatThrownBy(() -> certificateParser.getSigningCertificate(null))
+                .isInstanceOf(NullPointerException.class);
+        }
     }
 
-    @Test
-    @DisplayName("Should return null for issuer certificate from empty chain")
-    void shouldReturnNullForIssuerCertificateFromEmptyChain() {
-        // Given
-        X509Certificate[] emptyChain = new X509Certificate[0];
+    @Nested
+    @DisplayName("getIssuerCertificate() method")
+    class GetIssuerCertificateMethod {
 
-        // When
-        X509Certificate issuerCert = certificateParser.getIssuerCertificate(emptyChain);
+        @Test
+        @DisplayName("Should return null for empty chain")
+        void shouldReturnNullForEmptyChain() {
+            // Given
+            X509Certificate[] emptyChain = new X509Certificate[0];
 
-        // Then
-        assertThat(issuerCert).isNull();
+            // When
+            X509Certificate issuerCert = certificateParser.getIssuerCertificate(emptyChain);
+
+            // Then
+            assertThat(issuerCert).isNull();
+        }
+
+        @Test
+        @DisplayName("Should throw exception for null chain")
+        void shouldThrowExceptionForNullChain() {
+            // When/Then - implementation throws NPE for null
+            assertThatThrownBy(() -> certificateParser.getIssuerCertificate(null))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("Should return null for single certificate chain")
+        void shouldReturnNullForSingleCertChain() {
+            // Given - a chain with only one certificate (no issuer)
+            X509Certificate[] singleCertChain = new X509Certificate[]{null}; // Mock placeholder
+
+            // When
+            X509Certificate issuerCert = certificateParser.getIssuerCertificate(singleCertChain);
+
+            // Then
+            assertThat(issuerCert).isNull();
+        }
     }
 }
+
