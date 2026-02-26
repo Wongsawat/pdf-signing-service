@@ -4,11 +4,13 @@ import com.wpanther.pdfsigning.domain.service.PdfSigningService;
 import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCAuthClient;
+import com.wpanther.pdfsigning.infrastructure.client.csc.SadTokenValidator;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeRequest;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureRequest;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureResponse;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
+import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
 import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +44,8 @@ public class PdfSigningServiceImpl implements PdfSigningService {
     private final CSCApiClient apiClient;
     private final PadesSignatureEmbedder signatureEmbedder;
     private final CertificateParser certificateParser;
+    private final CertificateValidator certificateValidator;
+    private final SadTokenValidator sadTokenValidator;
     private final SignedPdfStorageProvider storageProvider;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -90,6 +94,10 @@ public class PdfSigningServiceImpl implements PdfSigningService {
             );
             log.debug("Received SAD token from CSC API");
 
+            // Step 3.5: Validate SAD token (security critical)
+            sadTokenValidator.validate(authResponse, credentialId);
+            log.debug("SAD token validated successfully");
+
             // Step 4: Call signHash endpoint
             // IMPORTANT: Use base64url encoding (URL-safe, no padding) for hash
             log.debug("Signing hash via CSC API");
@@ -114,6 +122,10 @@ public class PdfSigningServiceImpl implements PdfSigningService {
                 signResponse.getCertificate()
             );
             log.debug("Parsed certificate chain: {} certificates", certChain.length);
+
+            // Step 5.5: Validate certificate chain (security critical)
+            certificateValidator.validateChain(certChain);
+            log.debug("Certificate chain validated successfully");
 
             // Step 6: Build CMS/PKCS#7 signature
             log.debug("Building CMS/PKCS#7 signature");

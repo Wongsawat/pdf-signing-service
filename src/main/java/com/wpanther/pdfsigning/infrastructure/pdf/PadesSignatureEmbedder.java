@@ -65,45 +65,60 @@ public class PadesSignatureEmbedder {
      * @throws IOException if PDF cannot be processed
      */
     public byte[] computeByteRangeDigest(InputStream pdf) throws IOException {
-        // Create temp file for PDFBox 3.0
+        // Create temp file for PDFBox 3.0 with auto-cleanup on JVM exit
         Path tempFile = null;
+        PDDocument document = null;
         try {
-            tempFile = Files.createTempFile("pdf-sign-", ".pdf");
+            // Read all bytes first to ensure we have the complete PDF
             byte[] pdfBytes = pdf.readAllBytes();
+
+            // Create temp file with deleteOnExit option as safety net
+            tempFile = Files.createTempFile("pdf-sign-", ".pdf");
+            tempFile.toFile().deleteOnExit();
             Files.write(tempFile, pdfBytes);
 
-            try (PDDocument document = Loader.loadPDF(tempFile.toFile());
-                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            // Load PDF document
+            document = Loader.loadPDF(tempFile.toFile());
 
-                // Create signature dictionary
-                PDSignature signature = new PDSignature();
-                signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
-                signature.setSubFilter(SUBFILTER);
-                signature.setReason(SIGNATURE_REASON);
-                signature.setLocation(SIGNATURE_LOCATION);
-                signature.setSignDate(Calendar.getInstance());
+            // Create signature dictionary
+            PDSignature signature = new PDSignature();
+            signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+            signature.setSubFilter(SUBFILTER);
+            signature.setReason(SIGNATURE_REASON);
+            signature.setLocation(SIGNATURE_LOCATION);
+            signature.setSignDate(Calendar.getInstance());
 
-                // Add signature to document
-                document.addSignature(signature);
+            // Add signature to document
+            document.addSignature(signature);
 
-                // Prepare for external signing (deferred)
-                ExternalSigningSupport externalSigning =
-                    document.saveIncrementalForExternalSigning(output);
+            // Prepare for external signing (deferred)
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            ExternalSigningSupport externalSigning =
+                document.saveIncrementalForExternalSigning(output);
 
-                // Get the byte range content (everything except /Contents placeholder)
-                try (InputStream dataToSign = externalSigning.getContent()) {
-                    byte[] data = dataToSign.readAllBytes();
-                    return MessageDigest.getInstance(DIGEST_ALGORITHM).digest(data);
+            // Get the byte range content (everything except /Contents placeholder)
+            try (InputStream dataToSign = externalSigning.getContent()) {
+                byte[] data = dataToSign.readAllBytes();
+                return MessageDigest.getInstance(DIGEST_ALGORITHM).digest(data);
+            } catch (Exception e) {
+                throw new IOException("Failed to compute PDF digest", e);
+            }
+
+        } finally {
+            // Close document to release file handles
+            if (document != null) {
+                try {
+                    document.close();
                 } catch (Exception e) {
-                    throw new IOException("Failed to compute PDF digest", e);
+                    log.warn("Failed to close PDF document: {}", e.getMessage());
                 }
             }
-        } finally {
+            // Delete temp file immediately (not just on exit)
             if (tempFile != null) {
                 try {
                     Files.deleteIfExists(tempFile);
                 } catch (IOException e) {
-                    log.warn("Failed to delete temp file: {}", tempFile, e);
+                    log.warn("Failed to delete temp file: {} (will be cleaned up on JVM exit)", tempFile);
                 }
             }
         }
@@ -172,36 +187,51 @@ public class PadesSignatureEmbedder {
      */
     public byte[] embedSignature(byte[] pdfBytes, byte[] cmsSignature) throws IOException {
         Path tempFile = null;
+        PDDocument document = null;
         try {
+            // Create temp file with deleteOnExit option as safety net
             tempFile = Files.createTempFile("pdf-sign-", ".pdf");
+            tempFile.toFile().deleteOnExit();
             Files.write(tempFile, pdfBytes);
 
-            try (PDDocument document = Loader.loadPDF(tempFile.toFile());
-                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            // Load PDF document
+            document = Loader.loadPDF(tempFile.toFile());
 
-                PDSignature signature = new PDSignature();
-                signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
-                signature.setSubFilter(SUBFILTER);
-                signature.setReason(SIGNATURE_REASON);
-                signature.setLocation(SIGNATURE_LOCATION);
-                signature.setSignDate(Calendar.getInstance());
+            // Create signature dictionary
+            PDSignature signature = new PDSignature();
+            signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+            signature.setSubFilter(SUBFILTER);
+            signature.setReason(SIGNATURE_REASON);
+            signature.setLocation(SIGNATURE_LOCATION);
+            signature.setSignDate(Calendar.getInstance());
 
-                document.addSignature(signature);
+            document.addSignature(signature);
 
-                ExternalSigningSupport externalSigning =
-                    document.saveIncrementalForExternalSigning(output);
+            // Prepare output stream
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            ExternalSigningSupport externalSigning =
+                document.saveIncrementalForExternalSigning(output);
 
-                // Set the CMS signature
-                externalSigning.setSignature(cmsSignature);
+            // Set the CMS signature
+            externalSigning.setSignature(cmsSignature);
 
-                return output.toByteArray();
-            }
+            return output.toByteArray();
+
         } finally {
+            // Close document to release file handles
+            if (document != null) {
+                try {
+                    document.close();
+                } catch (Exception e) {
+                    log.warn("Failed to close PDF document: {}", e.getMessage());
+                }
+            }
+            // Delete temp file immediately (not just on exit)
             if (tempFile != null) {
                 try {
                     Files.deleteIfExists(tempFile);
                 } catch (IOException e) {
-                    log.warn("Failed to delete temp file: {}", tempFile, e);
+                    log.warn("Failed to delete temp file: {} (will be cleaned up on JVM exit)", tempFile);
                 }
             }
         }

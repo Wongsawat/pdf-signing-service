@@ -93,6 +93,19 @@ app:
     client-id: ${CSC_CLIENT_ID:pdf-signing-service}
     hash-algo: SHA256
     timeout-seconds: 30
+    sad:
+      # Minimum SAD token expiry in seconds (reject if expires sooner)
+      min-expiry-seconds: ${CSC_SAD_MIN_EXPIRY_SECONDS:60}
+      # Maximum SAD token expiry in seconds (warn if exceeds this)
+      max-expiry-seconds: ${CSC_SAD_MAX_EXPIRY_SECONDS:3600}
+    cert:
+      # Enable certificate chain validation
+      validation:
+        enabled: ${CSC_CERT_VALIDATION_ENABLED:true}
+      # Maximum certificate validity period in days (warn if exceeds)
+      max-validity-days: ${CSC_CERT_MAX_VALIDITY_DAYS:365}
+      # Minimum remaining validity in days (warn if less than this)
+      min-validity-remaining-days: ${CSC_CERT_MIN_VALIDITY_REMAINING_DAYS:7}
 
   # PAdES configuration
   pades:
