@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.messaging;
 
+import com.wpanther.saga.domain.enums.SagaStep;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -26,7 +27,7 @@ public class PdfSigningEventPublisher {
      */
     public void publishSuccess(
             String sagaId,
-            String sagaStep,
+            SagaStep sagaStep,
             String correlationId,
             String invoiceId,
             String invoiceNumber,
@@ -48,7 +49,7 @@ public class PdfSigningEventPublisher {
 
         // 2. Publish notification event (for notification-service observer)
         notificationEventPublisher.publishPdfSignedNotification(
-            invoiceId, invoiceNumber, documentType,
+            sagaId, invoiceId, invoiceNumber, documentType,
             signedDocumentId, signedPdfUrl, signedPdfSize,
             signatureLevel, signatureTimestamp, correlationId
         );
@@ -60,7 +61,7 @@ public class PdfSigningEventPublisher {
      */
     public void publishFailure(
             String sagaId,
-            String sagaStep,
+            SagaStep sagaStep,
             String correlationId,
             String invoiceId,
             String invoiceNumber,
@@ -74,7 +75,7 @@ public class PdfSigningEventPublisher {
 
         // 2. Publish notification event (for notification-service observer)
         notificationEventPublisher.publishPdfSigningFailureNotification(
-            invoiceId, invoiceNumber, documentType,
+            sagaId, invoiceId, invoiceNumber, documentType,
             errorMessage, correlationId
         );
     }
@@ -85,7 +86,7 @@ public class PdfSigningEventPublisher {
      */
     public void publishCompensated(
             String sagaId,
-            String sagaStep,
+            SagaStep sagaStep,
             String correlationId) {
 
         sagaReplyPublisher.publishCompensated(

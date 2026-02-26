@@ -2,7 +2,8 @@ package com.wpanther.pdfsigning.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.wpanther.saga.domain.model.IntegrationEvent;
+import com.wpanther.saga.domain.model.SagaCommand;
+import com.wpanther.saga.domain.enums.SagaStep;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -13,21 +14,12 @@ import java.util.UUID;
  * Consumed from: saga.command.pdf-signing
  *
  * Contains all information needed to download and sign the PDF.
- * Extends IntegrationEvent (not SagaCommand) - saga fields are included as regular fields.
+ * Extends SagaCommand which provides sagaId, sagaStep, and correlationId.
  */
 @Getter
-public class ProcessPdfSigningCommand extends IntegrationEvent {
+public class ProcessPdfSigningCommand extends SagaCommand {
 
     private static final long serialVersionUID = 1L;
-
-    @JsonProperty("sagaId")
-    private final String sagaId;
-
-    @JsonProperty("sagaStep")
-    private final String sagaStep;
-
-    @JsonProperty("correlationId")
-    private final String correlationId;
 
     @JsonProperty("documentId")
     private final String documentId;
@@ -58,7 +50,7 @@ public class ProcessPdfSigningCommand extends IntegrationEvent {
         @JsonProperty("eventType") String eventType,
         @JsonProperty("version") int version,
         @JsonProperty("sagaId") String sagaId,
-        @JsonProperty("sagaStep") String sagaStep,
+        @JsonProperty("sagaStep") SagaStep sagaStep,
         @JsonProperty("correlationId") String correlationId,
         @JsonProperty("documentId") String documentId,
         @JsonProperty("invoiceNumber") String invoiceNumber,
@@ -67,10 +59,7 @@ public class ProcessPdfSigningCommand extends IntegrationEvent {
         @JsonProperty("pdfSize") Long pdfSize,
         @JsonProperty("xmlEmbedded") Boolean xmlEmbedded
     ) {
-        super(eventId, occurredAt, eventType, version);
-        this.sagaId = sagaId;
-        this.sagaStep = sagaStep;
-        this.correlationId = correlationId;
+        super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
@@ -82,13 +71,10 @@ public class ProcessPdfSigningCommand extends IntegrationEvent {
     /**
      * Convenience constructor for testing.
      */
-    public ProcessPdfSigningCommand(String sagaId, String sagaStep, String correlationId,
+    public ProcessPdfSigningCommand(String sagaId, SagaStep sagaStep, String correlationId,
                                     String documentId, String invoiceNumber, String documentType,
                                     String pdfUrl, Long pdfSize, Boolean xmlEmbedded) {
-        super();
-        this.sagaId = sagaId;
-        this.sagaStep = sagaStep;
-        this.correlationId = correlationId;
+        super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;

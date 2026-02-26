@@ -8,6 +8,7 @@ import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.PdfSigningService;
 import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,7 +52,7 @@ class SagaCommandHandlerTest {
     void shouldProcessSigningCommandSuccessfully() {
         // Given
         ProcessPdfSigningCommand command = new ProcessPdfSigningCommand(
-            "saga-123", "sign-pdf", "corr-456",
+            "saga-123", SagaStep.SIGN_PDF, "corr-456",
             "doc-789", "INV-2024-001", "INVOICE",
             "http://example.com/file.pdf", 12345L, true
         );
@@ -90,7 +91,7 @@ class SagaCommandHandlerTest {
         verify(signingService).signPdf(eq("http://example.com/file.pdf"), any());
         verify(eventPublisher).publishSuccess(
             eq("saga-123"),
-            eq("sign-pdf"),
+            eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
             eq("doc-789"),
             eq("INV-2024-001"),
@@ -110,7 +111,7 @@ class SagaCommandHandlerTest {
     void shouldHandleAlreadyCompletedDocumentIdempotently() {
         // Given
         ProcessPdfSigningCommand command = new ProcessPdfSigningCommand(
-            "saga-123", "sign-pdf", "corr-456",
+            "saga-123", SagaStep.SIGN_PDF, "corr-456",
             "doc-789", "INV-2024-001", "INVOICE",
             "http://example.com/file.pdf", 12345L, true
         );
@@ -141,7 +142,7 @@ class SagaCommandHandlerTest {
         verify(signingService, never()).signPdf(any(), any());
         verify(eventPublisher).publishSuccess(
             eq("saga-123"),
-            eq("sign-pdf"),
+            eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
             eq("doc-789"),
             eq("INV-2024-001"),
@@ -161,7 +162,7 @@ class SagaCommandHandlerTest {
     void shouldHandleCompensationCommand() {
         // Given
         CompensatePdfSigningCommand command = new CompensatePdfSigningCommand(
-            "saga-123", "sign-pdf", "corr-456",
+            "saga-123", SagaStep.SIGN_PDF, "corr-456",
             "doc-789", "INVOICE", "sign-pdf"
         );
 
@@ -191,7 +192,7 @@ class SagaCommandHandlerTest {
         verify(documentRepository).deleteById(document.getId());
         verify(eventPublisher).publishCompensated(
             eq("saga-123"),
-            eq("sign-pdf"),
+            eq(SagaStep.SIGN_PDF),
             eq("corr-456")
         );
     }
@@ -201,7 +202,7 @@ class SagaCommandHandlerTest {
     void shouldHandleCompensationForNonExistentDocument() {
         // Given
         CompensatePdfSigningCommand command = new CompensatePdfSigningCommand(
-            "saga-123", "sign-pdf", "corr-456",
+            "saga-123", SagaStep.SIGN_PDF, "corr-456",
             "doc-789", "INVOICE", "sign-pdf"
         );
 
@@ -214,7 +215,7 @@ class SagaCommandHandlerTest {
         verify(documentRepository, never()).deleteById(any());
         verify(eventPublisher).publishCompensated(
             eq("saga-123"),
-            eq("sign-pdf"),
+            eq(SagaStep.SIGN_PDF),
             eq("corr-456")
         );
     }

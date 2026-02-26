@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.domain.event;
 
+import com.wpanther.saga.domain.model.TraceEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +18,7 @@ class PdfSignedNotificationEventTest {
     @DisplayName("Should create notification event with all fields")
     void shouldCreateNotificationEvent() {
         // Given
+        String sagaId = "saga-123";
         String invoiceId = "inv-123";
         String invoiceNumber = "INV-2024-001";
         String documentType = "INVOICE";
@@ -29,13 +31,16 @@ class PdfSignedNotificationEventTest {
 
         // When
         PdfSignedNotificationEvent event = PdfSignedNotificationEvent.create(
-            invoiceId, invoiceNumber, documentType,
+            sagaId, invoiceId, invoiceNumber, documentType,
             signedDocumentId, signedPdfUrl, signedPdfSize,
             signatureLevel, signatureTimestamp, correlationId
         );
 
         // Then
-        assertThat(event.getEventType()).isEqualTo("PdfSigned");
+        assertThat(event).isInstanceOf(TraceEvent.class);
+        assertThat(event.getTraceType()).isEqualTo("PdfSigned");
+        assertThat(event.getSagaId()).isEqualTo(sagaId);
+        assertThat(event.getSource()).isEqualTo("pdf-signing-service");
         assertThat(event.getInvoiceId()).isEqualTo(invoiceId);
         assertThat(event.getInvoiceNumber()).isEqualTo(invoiceNumber);
         assertThat(event.getDocumentType()).isEqualTo(documentType);
@@ -51,6 +56,7 @@ class PdfSignedNotificationEventTest {
     @DisplayName("Should create failure notification event")
     void shouldCreateFailureNotification() {
         // Given
+        String sagaId = "saga-123";
         String invoiceId = "inv-123";
         String invoiceNumber = "INV-2024-001";
         String documentType = "INVOICE";
@@ -59,12 +65,15 @@ class PdfSignedNotificationEventTest {
 
         // When
         PdfSigningFailedNotificationEvent event = PdfSigningFailedNotificationEvent.create(
-            invoiceId, invoiceNumber, documentType,
+            sagaId, invoiceId, invoiceNumber, documentType,
             errorMessage, correlationId
         );
 
         // Then
-        assertThat(event.getEventType()).isEqualTo("PdfSigningFailed");
+        assertThat(event).isInstanceOf(TraceEvent.class);
+        assertThat(event.getTraceType()).isEqualTo("PdfSigningFailed");
+        assertThat(event.getSagaId()).isEqualTo(sagaId);
+        assertThat(event.getSource()).isEqualTo("pdf-signing-service");
         assertThat(event.getInvoiceId()).isEqualTo(invoiceId);
         assertThat(event.getInvoiceNumber()).isEqualTo(invoiceNumber);
         assertThat(event.getDocumentType()).isEqualTo(documentType);

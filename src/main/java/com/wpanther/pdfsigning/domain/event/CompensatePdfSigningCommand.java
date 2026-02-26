@@ -2,7 +2,8 @@ package com.wpanther.pdfsigning.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.wpanther.saga.domain.model.IntegrationEvent;
+import com.wpanther.saga.domain.model.SagaCommand;
+import com.wpanther.saga.domain.enums.SagaStep;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -14,21 +15,12 @@ import java.util.UUID;
  *
  * Sent by the orchestrator when the saga fails and previous steps need to be compensated.
  * Compensation involves deleting the signed PDF and associated records.
- * Extends IntegrationEvent (not SagaCommand) - saga fields are included as regular fields.
+ * Extends SagaCommand which provides sagaId, sagaStep, and correlationId.
  */
 @Getter
-public class CompensatePdfSigningCommand extends IntegrationEvent {
+public class CompensatePdfSigningCommand extends SagaCommand {
 
     private static final long serialVersionUID = 1L;
-
-    @JsonProperty("sagaId")
-    private final String sagaId;
-
-    @JsonProperty("sagaStep")
-    private final String sagaStep;
-
-    @JsonProperty("correlationId")
-    private final String correlationId;
 
     @JsonProperty("documentId")
     private final String documentId;
@@ -50,16 +42,13 @@ public class CompensatePdfSigningCommand extends IntegrationEvent {
         @JsonProperty("eventType") String eventType,
         @JsonProperty("version") int version,
         @JsonProperty("sagaId") String sagaId,
-        @JsonProperty("sagaStep") String sagaStep,
+        @JsonProperty("sagaStep") SagaStep sagaStep,
         @JsonProperty("correlationId") String correlationId,
         @JsonProperty("documentId") String documentId,
         @JsonProperty("documentType") String documentType,
         @JsonProperty("stepToCompensate") String stepToCompensate
     ) {
-        super(eventId, occurredAt, eventType, version);
-        this.sagaId = sagaId;
-        this.sagaStep = sagaStep;
-        this.correlationId = correlationId;
+        super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.documentType = documentType;
         this.stepToCompensate = stepToCompensate;
@@ -68,12 +57,9 @@ public class CompensatePdfSigningCommand extends IntegrationEvent {
     /**
      * Convenience constructor for testing.
      */
-    public CompensatePdfSigningCommand(String sagaId, String sagaStep, String correlationId,
+    public CompensatePdfSigningCommand(String sagaId, SagaStep sagaStep, String correlationId,
                                        String documentId, String documentType, String stepToCompensate) {
-        super();
-        this.sagaId = sagaId;
-        this.sagaStep = sagaStep;
-        this.correlationId = correlationId;
+        super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.documentType = documentType;
         this.stepToCompensate = stepToCompensate;

@@ -37,6 +37,7 @@ public class NotificationEventPublisher {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPdfSignedNotification(
+            String sagaId,
             String invoiceId,
             String invoiceNumber,
             String documentType,
@@ -48,7 +49,7 @@ public class NotificationEventPublisher {
             String correlationId) {
 
         PdfSignedNotificationEvent notification = PdfSignedNotificationEvent.create(
-            invoiceId, invoiceNumber, documentType,
+            sagaId, invoiceId, invoiceNumber, documentType,
             signedDocumentId, signedPdfUrl, signedPdfSize,
             signatureLevel, signatureTimestamp, correlationId
         );
@@ -78,6 +79,7 @@ public class NotificationEventPublisher {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPdfSigningFailureNotification(
+            String sagaId,
             String invoiceId,
             String invoiceNumber,
             String documentType,
@@ -85,7 +87,7 @@ public class NotificationEventPublisher {
             String correlationId) {
 
         PdfSigningFailedNotificationEvent notification = PdfSigningFailedNotificationEvent.create(
-            invoiceId, invoiceNumber, documentType,
+            sagaId, invoiceId, invoiceNumber, documentType,
             errorMessage, correlationId
         );
 

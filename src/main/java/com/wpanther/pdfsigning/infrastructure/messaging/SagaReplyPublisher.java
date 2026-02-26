@@ -3,6 +3,7 @@ package com.wpanther.pdfsigning.infrastructure.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.pdfsigning.domain.event.PdfSigningReplyEvent;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +39,7 @@ public class SagaReplyPublisher {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishSuccess(
             String sagaId,
-            String sagaStep,
+            SagaStep sagaStep,
             String correlationId,
             String signedDocumentId,
             String signedPdfUrl,
@@ -75,7 +76,7 @@ public class SagaReplyPublisher {
      * Publish FAILURE reply when PDF signing fails.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishFailure(String sagaId, String sagaStep, String correlationId, String errorMessage) {
+    public void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
 
         PdfSigningReplyEvent reply = PdfSigningReplyEvent.failure(
             sagaId, sagaStep, correlationId, errorMessage
@@ -103,7 +104,7 @@ public class SagaReplyPublisher {
      * Publish COMPENSATED reply when compensation completes.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishCompensated(String sagaId, String sagaStep, String correlationId) {
+    public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
 
         PdfSigningReplyEvent reply = PdfSigningReplyEvent.compensated(
             sagaId, sagaStep, correlationId

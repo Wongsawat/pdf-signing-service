@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.domain.event;
 
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
@@ -19,7 +20,7 @@ class ProcessPdfSigningCommandTest {
     void shouldCreateCommandWithAllFields() {
         // Given
         String sagaId = "saga-123";
-        String sagaStep = "sign-pdf";
+        SagaStep sagaStep = SagaStep.SIGN_PDF;
         String correlationId = "corr-456";
         String documentId = "doc-789";
         String invoiceNumber = "INV-2024-001";
@@ -59,13 +60,14 @@ class ProcessPdfSigningCommandTest {
         // When
         ProcessPdfSigningCommand command = new ProcessPdfSigningCommand(
             eventId, occurredAt, eventType, version,
-            "saga-123", "sign-pdf", "corr-456",
+            "saga-123", SagaStep.SIGN_PDF, "corr-456",
             "doc-789", "INV-2024-001", "INVOICE",
             "http://example.com/file.pdf", 12345L, true
         );
 
         // Then
         assertThat(command.getSagaId()).isEqualTo("saga-123");
+        assertThat(command.getSagaStep()).isEqualTo(SagaStep.SIGN_PDF);
         assertThat(command.getDocumentId()).isEqualTo("doc-789");
     }
 }

@@ -1,6 +1,7 @@
 package com.wpanther.pdfsigning.domain.event;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.domain.model.SagaReply;
 
 /**
@@ -27,7 +28,7 @@ public class PdfSigningReplyEvent extends SagaReply {
      * Factory method for creating a SUCCESS reply.
      */
     public static PdfSigningReplyEvent success(
-            String sagaId, String sagaStep, String correlationId,
+            String sagaId, SagaStep sagaStep, String correlationId,
             String signedDocumentId, String signedPdfUrl, Long signedPdfSize,
             String transactionId, String certificate, String signatureLevel,
             java.time.Instant signatureTimestamp) {
@@ -47,7 +48,7 @@ public class PdfSigningReplyEvent extends SagaReply {
      * Factory method for creating a FAILURE reply.
      */
     public static PdfSigningReplyEvent failure(
-            String sagaId, String sagaStep, String correlationId, String errorMessage) {
+            String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
 
         return new PdfSigningReplyEvent(sagaId, sagaStep, correlationId, errorMessage);
     }
@@ -56,18 +57,18 @@ public class PdfSigningReplyEvent extends SagaReply {
      * Factory method for creating a COMPENSATED reply.
      */
     public static PdfSigningReplyEvent compensated(
-            String sagaId, String sagaStep, String correlationId) {
+            String sagaId, SagaStep sagaStep, String correlationId) {
 
         return new PdfSigningReplyEvent(sagaId, sagaStep, correlationId, ReplyStatus.COMPENSATED);
     }
 
     // Private constructor for SUCCESS and COMPENSATED
-    private PdfSigningReplyEvent(String sagaId, String sagaStep, String correlationId, ReplyStatus status) {
+    private PdfSigningReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, ReplyStatus status) {
         super(sagaId, sagaStep, correlationId, status);
     }
 
     // Private constructor for FAILURE
-    private PdfSigningReplyEvent(String sagaId, String sagaStep, String correlationId, String errorMessage) {
+    private PdfSigningReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         super(sagaId, sagaStep, correlationId, errorMessage);
     }
 

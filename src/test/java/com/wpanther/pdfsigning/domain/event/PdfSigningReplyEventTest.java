@@ -1,6 +1,7 @@
 package com.wpanther.pdfsigning.domain.event;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ class PdfSigningReplyEventTest {
     void shouldCreateSuccessReplyWithAllFields() {
         // Given
         String sagaId = "saga-123";
-        String sagaStep = "sign-pdf";
+        SagaStep sagaStep = SagaStep.SIGN_PDF;
         String correlationId = "corr-456";
         String signedDocumentId = "signed-doc-789";
         String signedPdfUrl = "http://example.com/signed.pdf";
@@ -55,7 +56,7 @@ class PdfSigningReplyEventTest {
     void shouldCreateFailureReply() {
         // Given
         String sagaId = "saga-123";
-        String sagaStep = "sign-pdf";
+        SagaStep sagaStep = SagaStep.SIGN_PDF;
         String correlationId = "corr-456";
         String errorMessage = "Signing failed: CSC API timeout";
 
@@ -75,7 +76,7 @@ class PdfSigningReplyEventTest {
     void shouldCreateCompensatedReply() {
         // Given
         String sagaId = "saga-123";
-        String sagaStep = "sign-pdf";
+        SagaStep sagaStep = SagaStep.SIGN_PDF;
         String correlationId = "corr-456";
 
         // When
