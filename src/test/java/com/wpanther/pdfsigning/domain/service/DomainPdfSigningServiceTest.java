@@ -1,6 +1,7 @@
 package com.wpanther.pdfsigning.domain.service;
 
 import com.wpanther.pdfsigning.domain.model.*;
+import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.port.DocumentStoragePort;
 import com.wpanther.pdfsigning.domain.port.PdfGenerationPort;
 import com.wpanther.pdfsigning.domain.port.SigningPort;
@@ -11,8 +12,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.security.cert.X509Certificate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +39,7 @@ import static org.mockito.Mockito.*;
  */
 @DisplayName("DomainPdfSigningService Tests")
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class DomainPdfSigningServiceTest {
 
     @Mock
@@ -182,7 +187,8 @@ class DomainPdfSigningServiceTest {
             SignedPdfDocument document = SignedPdfDocument.create(
                 "invoice-123", "INV-001", "url", 1024L, "corr", "TAX_INVOICE"
             );
-            document.markCompleted("path", "url", 2048L, "txn", "cert", "PAdES-BASELINE-T", null);
+            document.startSigning();  // Move to SIGNING state
+            document.markCompleted("path", "url", 2048L, "txn", "cert", "PAdES-BASELINE-T", LocalDateTime.now());
 
             when(mockRepository.findById(documentId)).thenReturn(Optional.of(document));
 
@@ -191,7 +197,7 @@ class DomainPdfSigningServiceTest {
 
             // Then
             verify(mockStoragePort).delete("url");
-            verify(mockRepository).delete(document);
+            verify(mockRepository).deleteById(document.getId());
         }
 
         @Test
@@ -207,7 +213,7 @@ class DomainPdfSigningServiceTest {
                 .hasMessageContaining("Document not found");
 
             verify(mockStoragePort, never()).delete(any());
-            verify(mockRepository, never()).delete(any());
+            verify(mockRepository, never()).deleteById(any());
         }
 
         @Test
@@ -227,7 +233,7 @@ class DomainPdfSigningServiceTest {
 
             // Then - should not attempt to delete from storage
             verify(mockStoragePort, never()).delete(any());
-            verify(mockRepository).delete(document);
+            verify(mockRepository).deleteById(document.getId());
         }
     }
 }

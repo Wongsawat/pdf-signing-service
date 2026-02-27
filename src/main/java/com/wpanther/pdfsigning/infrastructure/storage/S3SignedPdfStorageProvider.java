@@ -64,9 +64,9 @@ public class S3SignedPdfStorageProvider implements SignedPdfStorageProvider {
 
         if (pathStyleAccess) {
             s3Builder.forcePathStyle(true);
-            presignerBuilder.serviceConfiguration(builder -> builder
-                .pathStyleAccessEnabled(true));
-            log.info("Using path-style access for S3");
+            // Note: path-style access for presigner requires different configuration
+            // This may need to be configured via client override or environment
+            log.info("Using path-style access for S3 (presigner may need separate configuration)");
         }
 
         this.s3Client = s3Builder.build();
@@ -145,6 +145,6 @@ public class S3SignedPdfStorageProvider implements SignedPdfStorageProvider {
                 .build())
             .build();
 
-        return s3Presigner.presign(presignRequest).url().toString();
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 }
