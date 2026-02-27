@@ -1,0 +1,199 @@
+package com.wpanther.pdfsigning.infrastructure.adapter.secondary.csc;
+
+import com.wpanther.pdfsigning.domain.model.SigningException;
+import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
+import com.wpanther.pdfsigning.infrastructure.client.csc.CSCAuthClient;
+import com.wpanther.pdfsigning.infrastructure.client.csc.SadTokenValidator;
+import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
+import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureRequest;
+import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureResponse;
+import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
+import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
+import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for {@link CscSigningAdapter}.
+ * <p>
+ * Tests the CSC signing adapter using mocked CSC clients and dependencies.
+ * </p>
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("CscSigningAdapter Tests")
+class CscSigningAdapterTest {
+
+    @Mock
+    private CSCAuthClient mockAuthClient;
+
+    @Mock
+    private CSCApiClient mockApiClient;
+
+    @Mock
+    private PadesSignatureEmbedder mockSignatureEmbedder;
+
+    @Mock
+    private CertificateParser mockCertificateParser;
+
+    @Mock
+    private CertificateValidator mockCertificateValidator;
+
+    @Mock
+    private SadTokenValidator mockSadTokenValidator;
+
+    private CscSigningAdapter adapter;
+
+    @BeforeEach
+    void setUp() {
+        adapter = new CscSigningAdapter(
+            mockAuthClient,
+            mockApiClient,
+            mockSignatureEmbedder,
+            mockCertificateParser,
+            mockCertificateValidator,
+            mockSadTokenValidator
+        );
+        // Use reflection to set the private fields for testing
+        try {
+            var clientIdField = CscSigningAdapter.class.getDeclaredField("clientId");
+            clientIdField.setAccessible(true);
+            clientIdField.set(adapter, "test-client");
+
+            var credentialIdField = CscSigningAdapter.class.getDeclaredField("credentialId");
+            credentialIdField.setAccessible(true);
+            credentialIdField.set(adapter, "test-credential");
+
+            var hashAlgoField = CscSigningAdapter.class.getDeclaredField("hashAlgo");
+            hashAlgoField.setAccessible(true);
+            hashAlgoField.set(adapter, "SHA256");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set up test fields", e);
+        }
+    }
+
+    @Nested
+    @DisplayName("signPdf() method")
+    class SignPdfMethod {
+
+        @Test
+        @DisplayName("Should sign PDF successfully through complete flow")
+        void shouldSignPdfSuccessfully() throws Exception {
+            // Given
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+            X509Certificate[] certChain = new X509Certificate[0];
+
+            CSCAuthorizeResponse authResponse = new CSCAuthorizeResponse();
+            authResponse.setSAD("test-sad-token");
+
+            CSCSignatureResponse signResponse = CSCSignatureResponse.builder()
+                .signatures(new String[]{Base64.getEncoder().encodeToString("raw-signature".getBytes())})
+                .certificate("-----BEGIN CERTIFICATE-----\nMIIC9...\n-----END CERTIFICATE-----")
+                .build();
+
+            byte[] cmsSignature = "cms-signature".getBytes();
+            byte[] signedPdf = "signed-pdf-content".getBytes();
+
+            when(mockAuthClient.authorize(any())).thenReturn(authResponse);
+            when(mockApiClient.signHash(any())).thenReturn(signResponse);
+            when(mockCertificateParser.parseCertificateChain(any())).thenReturn(certChain);
+            when(mockSignatureEmbedder.buildCmsSignature(any(), any(), any())).thenReturn(cmsSignature);
+            when(mockSignatureEmbedder.embedSignature(any(), any())).thenReturn(signedPdf);
+
+            // When
+            byte[] result = adapter.signPdf(pdfBytes, digest, certChain);
+
+            // Then
+            assertThat(result).isEqualTo(signedPdf);
+            verify(mockAuthClient).authorize(any());
+            verify(mockSadTokenValidator).validate(authResponse, "test-credential");
+            verify(mockApiClient).signHash(any());
+            verify(mockCertificateParser).parseCertificateChain(any());
+            verify(mockSignatureEmbedder).buildCmsSignature(any(), any(), any());
+            verify(mockSignatureEmbedder).embedSignature(pdfBytes, cmsSignature);
+        }
+
+        @Test
+        @DisplayName("Should propagate authorization exceptions as SigningException")
+        void shouldPropagateAuthException() {
+            // Given
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+            X509Certificate[] certChain = new X509Certificate[0];
+
+            when(mockAuthClient.authorize(any()))
+                .thenThrow(new RuntimeException("Auth failed"));
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.signPdf(pdfBytes, digest, certChain))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("Failed to sign PDF");
+        }
+
+        @Test
+        @DisplayName("Should propagate signing exceptions as SigningException")
+        void shouldPropagateSigningException() throws Exception {
+            // Given
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+            X509Certificate[] certChain = new X509Certificate[0];
+
+            CSCAuthorizeResponse authResponse = new CSCAuthorizeResponse();
+            authResponse.setSAD("test-sad-token");
+
+            when(mockAuthClient.authorize(any())).thenReturn(authResponse);
+            when(mockApiClient.signHash(any()))
+                .thenThrow(new RuntimeException("Signing failed"));
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.signPdf(pdfBytes, digest, certChain))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("Failed to sign PDF");
+        }
+    }
+
+    @Nested
+    @DisplayName("validateCertificateChain() method")
+    class ValidateCertificateChainMethod {
+
+        @Test
+        @DisplayName("Should validate certificate chain successfully")
+        void shouldValidateCertificateChain() throws Exception {
+            // Given
+            X509Certificate[] certChain = new X509Certificate[0];
+            doNothing().when(mockCertificateValidator).validateChain(certChain);
+
+            // When/Then - should not throw
+            adapter.validateCertificateChain(certChain);
+
+            verify(mockCertificateValidator).validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should propagate validation exceptions as SigningException")
+        void shouldPropagateValidationException() throws Exception {
+            // Given
+            X509Certificate[] certChain = new X509Certificate[0];
+            doThrow(new RuntimeException("Validation failed"))
+                .when(mockCertificateValidator).validateChain(certChain);
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.validateCertificateChain(certChain))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("Certificate validation failed");
+        }
+    }
+}

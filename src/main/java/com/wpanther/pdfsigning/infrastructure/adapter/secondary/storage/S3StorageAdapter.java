@@ -36,6 +36,9 @@ public class S3StorageAdapter implements DocumentStoragePort {
     private final String bucketName;
     private final String baseUrl;
 
+    /**
+     * Constructor for Spring dependency injection with configuration values.
+     */
     public S3StorageAdapter(
         @Value("${app.storage.s3.bucket-name}") String bucketName,
         @Value("${app.storage.s3.region}") String region,
@@ -66,6 +69,16 @@ public class S3StorageAdapter implements DocumentStoragePort {
         this.s3Client = s3Builder.build();
 
         log.info("Initialized S3 document storage adapter: bucket={}, region={}", bucketName, region);
+    }
+
+    /**
+     * Constructor for testing with injected S3Client.
+     * Package-private for test access only.
+     */
+    S3StorageAdapter(S3Client s3Client, String bucketName, String baseUrl) {
+        this.s3Client = s3Client;
+        this.bucketName = bucketName;
+        this.baseUrl = baseUrl;
     }
 
     @Override
