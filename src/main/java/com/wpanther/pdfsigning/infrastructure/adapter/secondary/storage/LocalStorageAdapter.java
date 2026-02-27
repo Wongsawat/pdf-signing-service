@@ -1,0 +1,122 @@
+package com.wpanther.pdfsigning.infrastructure.adapter.secondary.storage;
+
+import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
+import com.wpanther.pdfsigning.domain.model.StorageException;
+import com.wpanther.pdfsigning.domain.port.DocumentStoragePort;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+
+/**
+ * Secondary adapter for local filesystem document storage.
+ * <p>
+ * Implements {@link DocumentStoragePort} using the local filesystem.
+ * Stores files in {basePath}/YYYY/MM/DD/signed-pdf-{documentId}.pdf
+ * </p>
+ */
+@Component
+@ConditionalOnProperty(name = "app.storage.provider", havingValue = "local", matchIfMissing = true)
+@Slf4j
+public class LocalStorageAdapter implements DocumentStoragePort {
+
+    private final String basePath;
+    private final String baseUrl;
+
+    public LocalStorageAdapter(
+        @Value("${app.storage.local.base-path}") String basePath,
+        @Value("${app.storage.local.base-url}") String baseUrl
+    ) {
+        this.basePath = basePath;
+        this.baseUrl = baseUrl;
+        log.info("Initialized local document storage adapter: basePath={}, baseUrl={}", basePath, baseUrl);
+    }
+
+    @Override
+    public String store(byte[] documentData, String documentType, SignedPdfDocument document) {
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            String year = String.format("%04d", now.getYear());
+            String month = String.format("%02d", now.getMonthValue());
+            String day = String.format("%02d", now.getDayOfMonth());
+
+            Path directory = Paths.get(basePath, year, month, day);
+            Files.createDirectories(directory);
+
+            String documentId = document != null ? document.getId().getValue().toString() : "unknown";
+            String filename = String.format("%s-%s.pdf", documentType.toLowerCase(), documentId);
+            Path filePath = directory.resolve(filename);
+
+            Files.write(filePath, documentData);
+
+            String path = filePath.toString();
+            String relativePath = path.substring(basePath.length());
+            String url = baseUrl + "/documents" + relativePath.replace("\\", "/");
+
+            log.info("Stored document locally: type={}, path={}, size={} bytes", documentType, path, documentData.length);
+            return url;
+
+        } catch (Exception e) {
+            log.error("Failed to store document to local filesystem", e);
+            throw new StorageException("Failed to store document to local filesystem: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public byte[] retrieve(String storageUrl) {
+        try {
+            // Convert URL back to filesystem path
+            String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
+            String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
+            Path filePath = Path.of(path);
+
+            if (!Files.exists(filePath)) {
+                throw new StorageException("Document not found: " + storageUrl);
+            }
+
+            byte[] content = Files.readAllBytes(filePath);
+            log.debug("Retrieved document from local storage: {} bytes", content.length);
+            return content;
+
+        } catch (StorageException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to retrieve document from local filesystem", e);
+            throw new StorageException("Failed to retrieve document: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void delete(String storageUrl) {
+        try {
+            // Convert URL back to filesystem path
+            if (!storageUrl.startsWith(baseUrl)) {
+                // Assume storageUrl is already a filesystem path
+                Path filePath = Path.of(storageUrl);
+                if (Files.exists(filePath)) {
+                    Files.delete(filePath);
+                    log.info("Deleted document from local storage: {}", storageUrl);
+                }
+                return;
+            }
+
+            String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
+            String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
+            Path filePath = Path.of(path);
+
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                log.info("Deleted document from local storage: {}", path);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to delete document from local filesystem", e);
+            throw new StorageException("Failed to delete document: " + e.getMessage(), e);
+        }
+    }
+}
