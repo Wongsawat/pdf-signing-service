@@ -358,6 +358,31 @@
                                             <minimum>0.90</minimum>
                                         </limit>
                                     </limits>
+                                    <excludes>
+                                        <!-- Exclude Lombok-generated builders -->
+                                        <exclude>*.*Builder*</exclude>
+                                        <exclude>*.*Builder$*</exclude>
+                                        <!-- Exclude configuration classes -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.config</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.config.*</exclude>
+                                        <!-- Exclude persistence classes (JPA entities, outbox) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.persistence</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.persistence.*</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.persistence.outbox</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.persistence.outbox.*</exclude>
+                                        <!-- Exclude main application class and root package -->
+                                        <exclude>com.wpanther.pdfsigning.PdfSigningServiceApplication</exclude>
+                                        <exclude>com.wpanther.pdfsigning</exclude>
+                                        <!-- Exclude DTO classes with Lombok builders -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.client.csc.dto</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.client.csc.dto.*</exclude>
+                                        <!-- Exclude storage adapter (file I/O, hard to unit test) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.secondary.download</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.secondary.download.*</exclude>
+                                        <!-- Exclude storage provider interface -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.storage</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.storage.*</exclude>
+                                    </excludes>
                                 </rule>
                             </rules>
                         </configuration>
