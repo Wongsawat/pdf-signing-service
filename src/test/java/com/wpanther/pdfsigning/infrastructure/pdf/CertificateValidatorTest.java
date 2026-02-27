@@ -6,10 +6,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.security.*;
 import java.security.cert.X509Certificate;
+import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for CertificateValidator.
@@ -61,18 +64,132 @@ class CertificateValidatorTest {
         }
 
         @Test
-        @DisplayName("Should accept valid certificate chain when validation enabled")
-        void shouldAcceptValidChainWhenValidationEnabled() {
+        @DisplayName("Should validate valid certificate chain successfully")
+        void shouldValidateValidCertificateChain() throws Exception {
             ReflectionTestUtils.setField(validator, "validationEnabled", true);
 
-            // Given - a mock certificate array (not actually validated without trust store)
-            // In real scenarios, this would require properly configured certificates
-            // For unit testing, we verify the validation logic is called
-            X509Certificate[] certChain = new X509Certificate[0];
+            // Given - a valid certificate chain with explicit dates
+            // Using explicit dates far in the future to avoid timing issues
+            Date pastDate = new Date(System.currentTimeMillis() - 86400000); // Yesterday
+            Date futureDate = new Date(System.currentTimeMillis() + 86400000L * 365); // 1 year from now
 
-            // When/Then - empty chain throws regardless of validation enabled
+            X509Certificate endEntity = mock(X509Certificate.class);
+            when(endEntity.getNotBefore()).thenReturn(pastDate);
+            when(endEntity.getNotAfter()).thenReturn(futureDate);
+            when(endEntity.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            when(endEntity.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=EndEntity"));
+            when(endEntity.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Intermediate"));
+
+            X509Certificate intermediate = mock(X509Certificate.class);
+            when(intermediate.getNotBefore()).thenReturn(pastDate);
+            when(intermediate.getNotAfter()).thenReturn(futureDate);
+            when(intermediate.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            when(intermediate.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Intermediate"));
+            when(intermediate.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Intermediate"));
+
+            X509Certificate[] certChain = new X509Certificate[]{endEntity, intermediate};
+
+            // When/Then - should not throw
+            validator.validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should validate certificate with one certificate")
+        void shouldValidateSingleCertificate() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - single certificate chain (self-signed)
+            // Using explicit dates far in the future to avoid timing issues
+            Date pastDate = new Date(System.currentTimeMillis() - 86400000); // Yesterday
+            Date futureDate = new Date(System.currentTimeMillis() + 86400000L * 30); // 30 days from now
+
+            X509Certificate cert = mock(X509Certificate.class);
+            when(cert.getNotBefore()).thenReturn(pastDate);
+            when(cert.getNotAfter()).thenReturn(futureDate);
+            when(cert.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            when(cert.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=SelfSigned"));
+            when(cert.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=SelfSigned"));
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should not throw
+            validator.validateChain(certChain);
+        }
+    }
+
+    @Nested
+    @DisplayName("validateEndEntityCertificate validation logic")
+    class ValidateEndEntityCertificateLogic {
+
+        @Test
+        @DisplayName("Should reject certificate not yet valid")
+        void shouldRejectNotYetValidCertificate() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate that starts in the future
+            X509Certificate futureCert = createMockCertificate(
+                new Date(System.currentTimeMillis() + 86400000), // notBefore = tomorrow
+                new Date(System.currentTimeMillis() + 172800000)  // notAfter = day after tomorrow
+            );
+            X509Certificate[] certChain = new X509Certificate[]{futureCert};
+
+            // When/Then
             assertThatThrownBy(() -> validator.validateChain(certChain))
-                .isInstanceOf(CertificateValidator.CertificateValidationException.class);
+                .isInstanceOf(CertificateValidator.CertificateValidationException.class)
+                .hasMessageContaining("not yet valid");
+        }
+
+        @Test
+        @DisplayName("Should reject expired certificate")
+        void shouldRejectExpiredCertificate() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate that expired yesterday
+            X509Certificate expiredCert = createMockCertificate(
+                new Date(System.currentTimeMillis() - 172800000), // notBefore = 2 days ago
+                new Date(System.currentTimeMillis() - 86400000)   // notAfter = yesterday
+            );
+            X509Certificate[] certChain = new X509Certificate[]{expiredCert};
+
+            // When/Then
+            assertThatThrownBy(() -> validator.validateChain(certChain))
+                .isInstanceOf(CertificateValidator.CertificateValidationException.class)
+                .hasMessageContaining("expired");
+        }
+    }
+
+    @Nested
+    @DisplayName("validateChainStructure validation logic")
+    class ValidateChainStructureLogic {
+
+        @Test
+        @DisplayName("Should verify certificate chain structure")
+        void shouldVerifyChainStructure() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - a proper certificate chain with explicit dates
+            // Using explicit dates far in the future to avoid timing issues
+            Date pastDate = new Date(System.currentTimeMillis() - 86400000); // Yesterday
+            Date futureDate = new Date(System.currentTimeMillis() + 86400000L * 365); // 1 year from now
+
+            X509Certificate endEntity = mock(X509Certificate.class);
+            when(endEntity.getNotBefore()).thenReturn(pastDate);
+            when(endEntity.getNotAfter()).thenReturn(futureDate);
+            when(endEntity.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            when(endEntity.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=EndEntity"));
+            when(endEntity.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Issuer CA"));
+
+            X509Certificate issuerCert = mock(X509Certificate.class);
+            when(issuerCert.getNotBefore()).thenReturn(pastDate);
+            when(issuerCert.getNotAfter()).thenReturn(futureDate);
+            when(issuerCert.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            when(issuerCert.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Issuer CA"));
+            when(issuerCert.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Issuer CA"));
+
+            X509Certificate[] certChain = new X509Certificate[]{endEntity, issuerCert};
+
+            // When/Then - should not throw
+            validator.validateChain(certChain);
         }
     }
 
@@ -124,15 +241,25 @@ class CertificateValidatorTest {
     class ConfigurationProperties {
 
         @Test
-        @DisplayName("Should have default validation enabled")
-        void shouldHaveDefaultValidationEnabled() {
-            // Given a new validator
+        @DisplayName("Should use default max validity days")
+        void shouldUseDefaultMaxValidityDays() {
+            // Given - validator with default config
             CertificateValidator newValidator = new CertificateValidator();
 
-            // When/Then - default should be enabled (check by trying to validate empty chain)
-            ReflectionTestUtils.setField(newValidator, "validationEnabled", true);
-            assertThatThrownBy(() -> newValidator.validateChain(new X509Certificate[0]))
-                .isInstanceOf(CertificateValidator.CertificateValidationException.class);
+            // When/Then - should be 365 days (check via reflection)
+            Long maxDays = (Long) ReflectionTestUtils.getField(newValidator, "maxValidityDays");
+            assertThat(maxDays).isEqualTo(365L);
+        }
+
+        @Test
+        @DisplayName("Should use default min validity remaining days")
+        void shouldUseDefaultMinValidityRemainingDays() {
+            // Given - validator with default config
+            CertificateValidator newValidator = new CertificateValidator();
+
+            // When/Then - should be 7 days
+            Long minDays = (Long) ReflectionTestUtils.getField(newValidator, "minValidityRemainingDays");
+            assertThat(minDays).isEqualTo(7L);
         }
     }
 
@@ -177,5 +304,97 @@ class CertificateValidatorTest {
             // Then
             assertThat(exception).isInstanceOf(RuntimeException.class);
         }
+    }
+
+    // Helper methods to create mock certificates
+
+    /**
+     * Creates a mock X509Certificate with the specified validity period.
+     * Note: getIssuerDN() and getSubjectDN() are NOT stubbed here - callers can stub as needed.
+     */
+    private X509Certificate createMockCertificate(Date notBefore, Date notAfter) {
+        X509Certificate mockCert = mock(X509Certificate.class);
+
+        // Use lenient() to allow stubbing without strict verification
+        lenient().when(mockCert.getNotBefore()).thenReturn(notBefore);
+        lenient().when(mockCert.getNotAfter()).thenReturn(notAfter);
+        lenient().when(mockCert.getKeyUsage()).thenReturn(new boolean[]{true, true}); // digitalSignature, nonRepudiation
+
+        try {
+            // Mock encoded form
+            lenient().when(mockCert.getEncoded()).thenReturn(new byte[100]);
+            // Make verify() succeed for self-signed certificate
+            lenient().doNothing().when(mockCert).verify(any(PublicKey.class));
+            lenient().when(mockCert.getExtendedKeyUsage()).thenReturn(java.util.Collections.singletonList("1.2.840.113583.1.1.8"));
+        } catch (Exception e) {
+            // Ignore - this is just mock setup
+        }
+
+        return mockCert;
+    }
+
+    /**
+     * Creates a valid certificate chain with proper issuer relationships.
+     * All dates are calculated relative to current time.
+     */
+    private X509Certificate[] createValidCertificateChain() throws Exception {
+        long now = System.currentTimeMillis();
+
+        // Create mock certificates where each cert verifies the next
+        X509Certificate endEntity = createMockCertificate(
+            new Date(now - 86400000),      // valid from yesterday
+            new Date(now + 86400000 * 30)   // valid for 30 days from now
+        );
+
+        X509Certificate intermediate = createMockCertificate(
+            new Date(now - 86400000 * 365),  // valid from 1 year ago
+            new Date(now + 86400000 * 365 * 2) // valid for 2 more years
+        );
+
+        // Set up issuer and subject relationships (use lenient to avoid stubbing conflicts)
+        lenient().when(endEntity.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=EndEntity"));
+        lenient().when(endEntity.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Intermediate"));
+        lenient().when(intermediate.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Intermediate"));
+        lenient().when(intermediate.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Intermediate")); // Self-signed
+
+        X509Certificate[] chain = new X509Certificate[]{endEntity, intermediate};
+        return chain;
+    }
+
+    /**
+     * Creates a proper certificate chain with verification working.
+     * All dates are calculated relative to current time.
+     */
+    private X509Certificate[] createProperCertificateChain() throws Exception {
+        long now = System.currentTimeMillis();
+
+        X509Certificate endEntity = createMockCertificate(
+            new Date(now - 86400000),        // valid from yesterday
+            new Date(now + 86400000 * 30)    // valid for 30 days from now
+        );
+
+        X509Certificate issuerCert = createMockCertificate(
+            new Date(now - 86400000 * 365),  // valid from 1 year ago
+            new Date(now + 86400000 * 365 * 2) // valid for 2 more years
+        );
+
+        // Set up proper issuer/subject relationship
+        lenient().when(endEntity.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=EndEntity"));
+        lenient().when(endEntity.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Issuer CA"));
+        lenient().when(issuerCert.getSubjectDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Issuer CA"));
+        lenient().when(issuerCert.getIssuerDN()).thenReturn(new javax.security.auth.x500.X500Principal("CN=Issuer CA")); // Self-signed
+
+        // Set up verification to work
+        PublicKey issuerKey = mock(PublicKey.class);
+        lenient().when(issuerCert.getPublicKey()).thenReturn(issuerKey);
+
+        try {
+            lenient().doNothing().when(endEntity).verify(issuerKey);
+            lenient().doNothing().when(issuerCert).verify(any(PublicKey.class)); // Self-signed root
+        } catch (Exception e) {
+            // Ignore
+        }
+
+        return new X509Certificate[]{endEntity, issuerCert};
     }
 }
