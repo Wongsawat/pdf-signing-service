@@ -1,37 +1,83 @@
 package com.wpanther.pdfsigning.application.service;
 
+import com.wpanther.pdfsigning.application.port.SagaCommandPort;
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
-import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
+import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
+import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
 import com.wpanther.pdfsigning.domain.service.PdfSigningService;
 import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * Handles saga commands from the orchestrator.
- * Publishes BOTH saga reply (to orchestrator) AND notification event (to notification-service).
- * Follows xml-signing-service pattern.
+ * Application service that implements {@link SagaCommandPort}.
+ * <p>
+ * This is the primary entry point from infrastructure (Kafka) into the application.
+ * It orchestrates the PDF signing workflow by coordinating:
+ * <ul>
+ *   <li>Domain service ({@link DomainPdfSigningService}) for business logic</li>
+ *   <li>Legacy service ({@link PdfSigningService}) for backward compatibility</li>
+ *   <li>Event publishing for saga replies and notifications</li>
+ * </ul>
+ * </p>
+ * <p>
+ * Implements hexagonal architecture pattern - this class implements
+ * a port interface ({@link SagaCommandPort}) that is called by
+ * primary adapters (Kafka consumers).
+ * </p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class SagaCommandHandler {
+public class SagaCommandHandler implements SagaCommandPort {
 
     private final SignedPdfDocumentRepository documentRepository;
-    private final PdfSigningService signingService;
+    private final PdfSigningService signingService;  // Legacy service (still used for now)
+    private final DomainPdfSigningService domainPdfSigningService;  // New hexagonal service
     private final SignedPdfStorageProvider storageProvider;
     private final PdfSigningEventPublisher eventPublisher;  // Combined publisher
 
+    // Explicit constructor for Spring dependency injection
+    public SagaCommandHandler(
+            SignedPdfDocumentRepository documentRepository,
+            PdfSigningService signingService,
+            DomainPdfSigningService domainPdfSigningService,
+            SignedPdfStorageProvider storageProvider,
+            PdfSigningEventPublisher eventPublisher) {
+        this.documentRepository = documentRepository;
+        this.signingService = signingService;
+        this.domainPdfSigningService = domainPdfSigningService;
+        this.storageProvider = storageProvider;
+        this.eventPublisher = eventPublisher;
+    }
+
     @Value("${app.signing.max-retries:3}")
     private int maxRetries;
+
+    /**
+     * Handles ProcessPdfSigningCommand from saga orchestrator (SagaCommandPort implementation).
+     * Delegates to {@link #handleProcessCommand(ProcessPdfSigningCommand)}.
+     */
+    @Override
+    public void handleProcessPdfSigning(ProcessPdfSigningCommand command) {
+        handleProcessCommand(command);
+    }
+
+    /**
+     * Handles CompensatePdfSigningCommand from saga orchestrator (SagaCommandPort implementation).
+     * Delegates to {@link #handleCompensation(CompensatePdfSigningCommand)}.
+     */
+    @Override
+    public void handleCompensatePdfSigning(CompensatePdfSigningCommand command) {
+        handleCompensation(command);
+    }
 
     /**
      * Handles ProcessPdfSigningCommand from saga orchestrator.
