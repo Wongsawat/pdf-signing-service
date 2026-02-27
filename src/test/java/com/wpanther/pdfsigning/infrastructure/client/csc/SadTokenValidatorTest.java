@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,6 +127,45 @@ class SadTokenValidatorTest {
                 .isInstanceOf(SadTokenValidator.SadTokenValidationException.class)
                 .hasMessageContaining("expires too soon")
                 .hasMessageContaining("30");
+        }
+
+        @Test
+        @DisplayName("Should accept SAD token with expiry above maximum (logs warning)")
+        void shouldAcceptSadTokenAboveMaximum() {
+            CSCAuthorizeResponse response = new CSCAuthorizeResponse();
+            response.setSAD("valid-base64-token-with-sufficient-length");
+            response.setExpiresIn(5000L); // More than default 3600 seconds (1 hour)
+
+            // Should not throw exception, but logs a warning
+            validator.validate(response, "test-credential");
+
+            // No exception = success (warning logged but not verified in unit test)
+        }
+    }
+
+    @Nested
+    @DisplayName("SadTokenValidationException")
+    class SadTokenValidationExceptionTests {
+
+        @Test
+        @DisplayName("Should create exception with message")
+        void shouldCreateExceptionWithMessage() {
+            SadTokenValidator.SadTokenValidationException exception =
+                new SadTokenValidator.SadTokenValidationException("Test error message");
+
+            assertThat(exception.getMessage()).isEqualTo("Test error message");
+            assertThat(exception.getCause()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should create exception with message and cause")
+        void shouldCreateExceptionWithMessageAndCause() {
+            Throwable cause = new IOException("Underlying error");
+            SadTokenValidator.SadTokenValidationException exception =
+                new SadTokenValidator.SadTokenValidationException("Test error message", cause);
+
+            assertThat(exception.getMessage()).isEqualTo("Test error message");
+            assertThat(exception.getCause()).isSameAs(cause);
         }
     }
 
