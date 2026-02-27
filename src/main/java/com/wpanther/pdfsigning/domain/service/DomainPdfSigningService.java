@@ -2,6 +2,7 @@ package com.wpanther.pdfsigning.domain.service;
 
 import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
+import com.wpanther.pdfsigning.domain.port.DocumentDownloadPort;
 import com.wpanther.pdfsigning.domain.port.DocumentStoragePort;
 import com.wpanther.pdfsigning.domain.port.PdfGenerationPort;
 import com.wpanther.pdfsigning.domain.port.SigningPort;
@@ -30,23 +31,27 @@ public class DomainPdfSigningService {
     private final SigningPort signingPort;
     private final PdfGenerationPort pdfPort;
     private final DocumentStoragePort storagePort;
+    private final DocumentDownloadPort downloadPort;
     private final SignedPdfDocumentRepository repository;
 
     /**
      * Creates a new domain PDF signing service.
      *
-     * @param signingPort  Port for signing operations (CSC, mock, etc.)
-     * @param pdfPort      Port for PDF-specific processing (digest, embedding)
-     * @param storagePort  Port for document storage
-     * @param repository   Repository for persisting signed documents
+     * @param signingPort   Port for signing operations (CSC, mock, etc.)
+     * @param pdfPort       Port for PDF-specific processing (digest, embedding)
+     * @param storagePort   Port for document storage
+     * @param downloadPort  Port for downloading PDF documents
+     * @param repository    Repository for persisting signed documents
      */
     public DomainPdfSigningService(SigningPort signingPort,
                                     PdfGenerationPort pdfPort,
                                     DocumentStoragePort storagePort,
+                                    DocumentDownloadPort downloadPort,
                                     SignedPdfDocumentRepository repository) {
         this.signingPort = signingPort;
         this.pdfPort = pdfPort;
         this.storagePort = storagePort;
+        this.downloadPort = downloadPort;
         this.repository = repository;
     }
 
@@ -100,24 +105,27 @@ public class DomainPdfSigningService {
         document.startSigning();
         document = repository.save(document);
 
-        // Step 3: Compute byte range digest
+        // Step 3: Download PDF
+        log.debug("Downloading PDF from URL: {}", originalPdfUrl);
+        byte[] pdfBytes = downloadPort.downloadPdf(originalPdfUrl);
+
+        // Step 4: Compute byte range digest
         log.debug("Computing PDF byte range digest");
-        byte[] pdfBytes = downloadPdfBytes(originalPdfUrl);
         byte[] digest = pdfPort.computeByteRangeDigest(pdfBytes);
         log.debug("Computed digest: {} bytes", digest.length);
 
-        // Step 4: Sign the digest
+        // Step 5: Sign the digest
         log.debug("Signing digest with certificate chain");
         byte[] signedPdfBytes = signingPort.signPdf(pdfBytes, digest, certChain);
         log.debug("Signed PDF: {} bytes", signedPdfBytes.length);
 
-        // Step 5: Store the signed PDF
+        // Step 6: Store the signed PDF
         log.debug("Storing signed PDF");
         String storageUrl = storagePort.store(signedPdfBytes, "SIGNED_PDF", document);
         String storagePath = extractPathFromUrl(storageUrl);
         log.debug("Stored signed PDF at: {}", storageUrl);
 
-        // Step 6: Mark as completed
+        // Step 7: Mark as completed
         String transactionId = UUID.randomUUID().toString();
         String certificate = extractCertificatePem(certChain);
         document.markCompleted(
@@ -153,24 +161,6 @@ public class DomainPdfSigningService {
 
         repository.deleteById(document.getId());
         log.info("Signing compensation completed for document: {}", documentId);
-    }
-
-    /**
-     * Download PDF bytes from URL.
-     * <p>
-     * NOTE: In a true hexagonal architecture, this would be delegated
-     * to a separate port (e.g., DocumentDownloadPort). For now,
-     * we keep it simple since this is infrastructure concern.
-     * </p>
-     *
-     * @param url URL to download from
-     * @return PDF bytes
-     * @throws SigningException if download fails
-     */
-    private byte[] downloadPdfBytes(String url) {
-        // This would be delegated to a port in a full implementation
-        // For now, throw an exception to indicate this needs implementation
-        throw new SigningException("PDF download not yet implemented - use DocumentDownloadPort");
     }
 
     /**
