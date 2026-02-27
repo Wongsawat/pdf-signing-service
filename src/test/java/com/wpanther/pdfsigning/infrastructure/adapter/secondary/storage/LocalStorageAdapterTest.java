@@ -184,6 +184,16 @@ class LocalStorageAdapterTest {
             // Then
             assertThat(Files.exists(testFile)).isFalse();
         }
+
+        @Test
+        @DisplayName("Should handle deletion of non-existent file by direct path")
+        void shouldHandleNonExistentFileByDirectPath() {
+            // Given - file doesn't exist
+            Path nonExistentFile = tempDir.resolve("non-existent.pdf");
+
+            // When/Then - should not throw
+            adapter.delete(nonExistentFile.toString());
+        }
     }
 
     /**

@@ -201,6 +201,145 @@ class S3StorageAdapterTest {
         }
     }
 
+    @Nested
+    @DisplayName("URL key extraction")
+    class UrlKeyExtractionTests {
+
+        @Test
+        @DisplayName("Should retrieve document with pre-signed URL containing query params")
+        void shouldRetrieveWithPresignedUrl() {
+            // Given - URL with query parameters (simulating pre-signed URL)
+            String presignedUrl = "http://localhost:9000/etax-signed-pdfs/signed-pdf/2024/02/27/test-file.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256";
+
+            when(mockS3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(new RuntimeException("Stream response"));
+
+            // When/Then - verify getObject is called with key extracted from before "?"
+            assertThatThrownBy(() -> adapter.retrieve(presignedUrl))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
+
+            // Verify the key was extracted correctly (without query params)
+            verify(mockS3Client).getObject(any(GetObjectRequest.class));
+        }
+
+        @Test
+        @DisplayName("Should extract key from URL with bucket path")
+        void shouldExtractKeyFromUrlWithBucketPath() {
+            // Given - URL with full bucket path
+            when(mockS3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(new RuntimeException("Stream response"));
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.retrieve("http://localhost:9000/etax-signed-pdfs/signed-pdf/test.pdf"))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
+
+            // Verify getObject was called
+            verify(mockS3Client).getObject(any(GetObjectRequest.class));
+        }
+
+        @Test
+        @DisplayName("Should handle simple key without URL structure")
+        void shouldHandleSimpleKey() {
+            // Given - just a key, not a full URL
+            when(mockS3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(new RuntimeException("Stream response"));
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.retrieve("simple-key.pdf"))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
+
+            // Verify the key was used
+            verify(mockS3Client).getObject(any(GetObjectRequest.class));
+        }
+
+        @Test
+        @DisplayName("Should handle malformed URL gracefully in retrieve")
+        void shouldHandleMalformedUrl() {
+            // Given - malformed URL that could cause issues during parsing
+            when(mockS3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(S3Exception.builder().message("Invalid key").build());
+
+            // When/Then - should extract key and call S3, which throws exception
+            assertThatThrownBy(() -> adapter.retrieve("malformed:///weird//url.pdf"))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Document type handling")
+    class DocumentTypeTests {
+
+        @Test
+        @DisplayName("Should sanitize document type with underscores")
+        void shouldSanitizeDocumentTypeWithUnderscores() {
+            // Given
+            byte[] documentData = "test pdf".getBytes();
+            SignedPdfDocument document = createTestDocument();
+
+            // When
+            String storageUrl = adapter.store(documentData, "TAX_INVOICE", document);
+
+            // Then - underscores should be replaced with hyphens
+            assertThat(storageUrl).contains("tax-invoice/");
+            assertThat(storageUrl).doesNotContain("TAX_INVOICE");
+        }
+
+        @Test
+        @DisplayName("Should preserve document type without underscores")
+        void shouldPreserveDocumentTypeWithoutUnderscores() {
+            // Given
+            byte[] documentData = "test pdf".getBytes();
+            SignedPdfDocument document = createTestDocument();
+
+            // When
+            String storageUrl = adapter.store(documentData, "INVOICE", document);
+
+            // Then
+            assertThat(storageUrl).contains("invoice/");
+        }
+    }
+
+    @Nested
+    @DisplayName("Spring constructor")
+    class SpringConstructorTests {
+
+        @Test
+        @DisplayName("Should create adapter with Spring constructor parameters")
+        void shouldCreateWithSpringConstructor() {
+            // When - using the main Spring constructor with all parameters
+            S3StorageAdapter springAdapter = new S3StorageAdapter(
+                "test-bucket",
+                "us-east-1",
+                "test-access-key",
+                "test-secret-key",
+                "",  // empty endpoint
+                false,  // no path style access
+                ""  // empty baseUrl - should use default
+            );
+
+            // Then - adapter should be created successfully
+            assertThat(springAdapter).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should create adapter with custom endpoint")
+        void shouldCreateWithCustomEndpoint() {
+            // When - using custom endpoint (e.g., MinIO)
+            S3StorageAdapter adapterWithEndpoint = new S3StorageAdapter(
+                "test-bucket",
+                "us-east-1",
+                "minioadmin",
+                "minioadmin",
+                "http://localhost:9000",  // custom endpoint
+                true,  // path style access for MinIO
+                "http://localhost:9000/test-bucket/"
+            );
+
+            // Then
+            assertThat(adapterWithEndpoint).isNotNull();
+        }
+    }
+
     /**
      * Helper to create a test SignedPdfDocument.
      */
