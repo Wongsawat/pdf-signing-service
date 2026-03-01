@@ -1,5 +1,9 @@
 package com.wpanther.pdfsigning.infrastructure.config.properties;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -26,12 +30,14 @@ public class CscProperties {
      * Credential ID to use for signing operations.
      * This identifies which key/certificate to use in the CSC service.
      */
+    @NotBlank(message = "CSC credential ID must not be blank")
     private String credentialId;
 
     /**
      * Hash algorithm to use for signature operations.
      * Default: SHA256
      */
+    @Pattern(regexp = "^(SHA256|SHA384|SHA512)$", message = "Hash algorithm must be SHA256, SHA384, or SHA512")
     private String hashAlgo = "SHA256";
 
     /**
@@ -61,6 +67,8 @@ public class CscProperties {
          * Certificates valid beyond this period will be rejected.
          * Default: 365 days (1 year)
          */
+        @Min(value = 1, message = "Max validity days must be at least 1")
+        @Max(value = 3650, message = "Max validity days must not exceed 3650 (10 years)")
         private int maxValidityDays = 365;
 
         /**
@@ -68,6 +76,8 @@ public class CscProperties {
          * Certificates expiring sooner than this will trigger a warning.
          * Default: 7 days
          */
+        @Min(value = 0, message = "Min validity remaining days must be non-negative")
+        @Max(value = 365, message = "Min validity remaining days must not exceed 365")
         private int minValidityRemainingDays = 7;
     }
 
@@ -82,6 +92,8 @@ public class CscProperties {
          * Tokens expiring sooner than this will be rejected.
          * Default: 60 seconds
          */
+        @Min(value = 1, message = "Min expiry seconds must be at least 1")
+        @Max(value = 3600, message = "Min expiry seconds must not exceed 3600 (1 hour)")
         private int minExpirySeconds = 60;
 
         /**
@@ -89,6 +101,8 @@ public class CscProperties {
          * Tokens expiring later than this will be rejected.
          * Default: 3600 seconds (1 hour)
          */
+        @Min(value = 60, message = "Max expiry seconds must be at least 60")
+        @Max(value = 86400, message = "Max expiry seconds must not exceed 86400 (24 hours)")
         private int maxExpirySeconds = 3600;
     }
 }

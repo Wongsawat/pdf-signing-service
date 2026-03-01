@@ -1,5 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.config.properties;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,8 @@ public class KafkaProperties {
      * Kafka bootstrap servers (comma-separated list of host:port).
      * Default: localhost:9092
      */
+    @NotBlank(message = "Kafka bootstrap servers must not be blank")
+    @Pattern(regexp = "^([a-zA-Z0-9.-]+:\\d+,?)+$", message = "Kafka bootstrap servers must be in format 'host:port,host:port'")
     private String bootstrapServers = "localhost:9092";
 
     /**
@@ -37,30 +41,35 @@ public class KafkaProperties {
          * Topic for consuming saga commands from orchestrator.
          * Default: saga.command.pdf-signing
          */
+        @NotBlank(message = "Saga command topic must not be blank")
         private String sagaCommand = "saga.command.pdf-signing";
 
         /**
          * Topic for consuming saga compensation commands from orchestrator.
          * Default: saga.compensation.pdf-signing
          */
+        @NotBlank(message = "Saga compensation topic must not be blank")
         private String sagaCompensation = "saga.compensation.pdf-signing";
 
         /**
          * Topic for publishing saga replies to orchestrator.
          * Default: saga.reply.pdf-signing
          */
+        @NotBlank(message = "Saga reply topic must not be blank")
         private String sagaReply = "saga.reply.pdf-signing";
 
         /**
          * Topic for publishing notification events to notification-service.
          * Default: notification.events
          */
+        @NotBlank(message = "Notification events topic must not be blank")
         private String notificationEvents = "notification.events";
 
         /**
          * Dead Letter Queue topic for failed messages.
          * Default: pdf.signing.dlq
          */
+        @NotBlank(message = "DLQ topic must not be blank")
         private String dlq = "pdf.signing.dlq";
     }
 }
