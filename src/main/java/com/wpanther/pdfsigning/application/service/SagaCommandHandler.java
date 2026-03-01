@@ -6,25 +6,21 @@ import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
-import com.wpanther.pdfsigning.domain.service.PdfSigningService;
-import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
  * Application service that implements {@link SagaCommandPort}.
  * <p>
  * This is the primary entry point from infrastructure (Kafka) into the application.
- * It orchestrates the PDF signing workflow by coordinating:
+ * It orchestrates the PDF signing workflow using hexagonal architecture:
  * <ul>
  *   <li>Domain service ({@link DomainPdfSigningService}) for business logic</li>
- *   <li>Legacy service ({@link PdfSigningService}) for backward compatibility</li>
  *   <li>Event publishing for saga replies and notifications</li>
  * </ul>
  * </p>
@@ -39,22 +35,16 @@ import java.util.Optional;
 public class SagaCommandHandler implements SagaCommandPort {
 
     private final SignedPdfDocumentRepository documentRepository;
-    private final PdfSigningService signingService;  // Legacy service (still used for now)
-    private final DomainPdfSigningService domainPdfSigningService;  // New hexagonal service
-    private final SignedPdfStorageProvider storageProvider;
-    private final PdfSigningEventPublisher eventPublisher;  // Combined publisher
+    private final DomainPdfSigningService domainPdfSigningService;
+    private final PdfSigningEventPublisher eventPublisher;
 
     // Explicit constructor for Spring dependency injection
     public SagaCommandHandler(
             SignedPdfDocumentRepository documentRepository,
-            PdfSigningService signingService,
             DomainPdfSigningService domainPdfSigningService,
-            SignedPdfStorageProvider storageProvider,
             PdfSigningEventPublisher eventPublisher) {
         this.documentRepository = documentRepository;
-        this.signingService = signingService;
         this.domainPdfSigningService = domainPdfSigningService;
-        this.storageProvider = storageProvider;
         this.eventPublisher = eventPublisher;
     }
 
@@ -130,21 +120,22 @@ public class SagaCommandHandler implements SagaCommandPort {
             document.startSigning();
             documentRepository.save(document);
 
-            // 6. Execute signing
-            PdfSigningService.SignedPdfResult result = signingService.signPdf(
+            // 6. Execute signing via hexagonal domain service
+            DomainPdfSigningService.SignedPdfResult result = domainPdfSigningService.signPdf(
                 command.getPdfUrl(),
-                document.getId().toString()
+                document.getId().toString(),
+                PadesLevel.BASELINE_B  // Default PAdES level for Thai e-Tax compliance
             );
 
             // 7. Mark completed (state transition)
             document.markCompleted(
-                result.getSignedPdfPath(),
-                result.getSignedPdfUrl(),
-                result.getSignedPdfSize(),
-                result.getTransactionId(),
-                result.getCertificate(),
-                result.getSignatureLevel(),
-                result.getSignatureTimestamp()
+                result.signedPdfPath(),
+                result.signedPdfUrl(),
+                result.signedPdfSize(),
+                result.transactionId(),
+                result.certificate(),
+                result.signatureLevel(),
+                result.signatureTimestamp().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
             );
             documentRepository.save(document);
 
@@ -157,12 +148,12 @@ public class SagaCommandHandler implements SagaCommandPort {
                 command.getInvoiceNumber(),
                 command.getDocumentType(),
                 document.getId().toString(),
-                document.getSignedPdfUrl(),
-                document.getSignedPdfSize(),
-                document.getTransactionId(),
-                document.getCertificate(),
-                document.getSignatureLevel(),
-                result.getSignatureTimestamp().atZone(java.time.ZoneId.systemDefault()).toInstant()
+                result.signedPdfUrl(),
+                result.signedPdfSize(),
+                result.transactionId(),
+                result.certificate(),
+                result.signatureLevel(),
+                result.signatureTimestamp()
             );
 
             log.info("PDF signing completed successfully for documentId={}, sagaId={}",
@@ -203,31 +194,25 @@ public class SagaCommandHandler implements SagaCommandPort {
             command.getSagaId(), command.getDocumentId());
 
         try {
-            // 1. Find and delete the signed document
+            // 1. Find the signed document
             Optional<SignedPdfDocument> existing = documentRepository.findByInvoiceId(command.getDocumentId());
 
             if (existing.isPresent()) {
                 SignedPdfDocument document = existing.get();
 
-                // Delete signed PDF from storage
-                try {
-                    if (document.getSignedPdfPath() != null) {
-                        storageProvider.delete(document.getSignedPdfPath());
-                        log.info("Deleted signed PDF: {}", document.getSignedPdfPath());
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to delete signed PDF: {}", document.getSignedPdfPath(), e);
-                }
+                // 2. Compensate via domain service (deletes from storage and database)
+                domainPdfSigningService.compensateSigning(
+                    document.getId(),
+                    document.getSignedPdfUrl()
+                );
 
-                // Delete from database
-                documentRepository.deleteById(document.getId());
-                log.info("Deleted SignedPdfDocument {} for compensation", document.getId());
+                log.info("Compensation completed for document: {}", document.getId());
             } else {
                 log.info("No signed document found for documentId={}, compensation already done or never existed",
                     command.getDocumentId());
             }
 
-            // 2. Send COMPENSATED reply (idempotent)
+            // 3. Send COMPENSATED reply (idempotent)
             // Note: No notification event for compensation - orchestrator handles that
             eventPublisher.publishCompensated(
                 command.getSagaId(),

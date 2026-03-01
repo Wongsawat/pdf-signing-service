@@ -1,6 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.config;
 
-import com.wpanther.pdfsigning.domain.service.PdfSigningService;
+import com.wpanther.pdfsigning.domain.model.SigningException;
 import feign.Response;
 import feign.codec.ErrorDecoder;
 import lombok.extern.slf4j.Slf4j;
@@ -26,15 +26,15 @@ public class CSCErrorDecoder implements ErrorDecoder {
                 methodKey, response.status(), errorMessage);
 
         return switch (response.status()) {
-            case 400 -> new PdfSigningService.PdfSigningException(
+            case 400 -> new SigningException(
                     "Bad request to CSC API: " + errorMessage);
-            case 401 -> new PdfSigningService.PdfSigningException(
+            case 401 -> new SigningException(
                     "Authentication failed with CSC API: " + errorMessage);
-            case 403 -> new PdfSigningService.PdfSigningException(
+            case 403 -> new SigningException(
                     "Access denied by CSC API: " + errorMessage);
-            case 404 -> new PdfSigningService.PdfSigningException(
+            case 404 -> new SigningException(
                     "CSC API endpoint not found: " + errorMessage);
-            case 500, 502, 503, 504 -> new PdfSigningService.PdfSigningException(
+            case 500, 502, 503, 504 -> new SigningException(
                     "CSC API server error: " + errorMessage);
             default -> defaultDecoder.decode(methodKey, response);
         };

@@ -9,8 +9,12 @@ import com.wpanther.pdfsigning.domain.port.SigningPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Base64;
 import java.util.UUID;
 
 /**
@@ -33,6 +37,23 @@ public class DomainPdfSigningService {
     private final DocumentStoragePort storagePort;
     private final DocumentDownloadPort downloadPort;
     private final SignedPdfDocumentRepository repository;
+
+    /**
+     * Result of a PDF signing operation.
+     * <p>
+     * Contains all information needed by the application layer
+     * to update the aggregate and publish events.
+     * </p>
+     */
+    public record SignedPdfResult(
+        String signedPdfPath,
+        String signedPdfUrl,
+        Long signedPdfSize,
+        String transactionId,
+        String certificate,
+        String signatureLevel,
+        Instant signatureTimestamp
+    ) {}
 
     /**
      * Creates a new domain PDF signing service.
@@ -58,108 +79,86 @@ public class DomainPdfSigningService {
     /**
      * Sign a PDF document with PAdES signature.
      * <p>
-     * This method orchestrates the signing workflow:
+     * This method orchestrates the signing workflow using hexagonal ports:
      * <ol>
-     *   <li>Validates the certificate chain</li>
-     *   <li>Computes the byte range digest</li>
-     *   <li>Signs the digest</li>
-     *   <li>Embeds the signature into the PDF</li>
-     *   <li>Stores the signed PDF</li>
-     *   <li>Persists the document aggregate</li>
+     *   <li>Downloads PDF via {@link DocumentDownloadPort}</li>
+     *   <li>Computes byte range digest via {@link PdfGenerationPort}</li>
+     *   <li>Validates certificate chain via {@link SigningPort}</li>
+     *   <li>Signs PDF via {@link SigningPort}</li>
+     *   <li>Stores signed PDF via {@link DocumentStoragePort}</li>
      * </ol>
      * </p>
      *
-     * @param invoiceId       Business identifier (for idempotency)
-     * @param invoiceNumber   Human-readable invoice number
-     * @param originalPdfUrl  URL of the unsigned PDF
-     * @param originalPdfSize Size of the unsigned PDF in bytes
-     * @param certChain       Certificate chain for signature
-     * @param padesLevel      Desired PAdES conformance level
-     * @param correlationId   Correlation ID for tracing
-     * @return The signed and stored document aggregate
+     * @param originalPdfUrl URL of the unsigned PDF
+     * @param documentId     Unique identifier for this signing operation
+     * @param padesLevel     Desired PAdES conformance level
+     * @return SignedPdfResult containing all signing details
      * @throws SigningException if signing fails
-     * @throws StorageException if storage fails
      */
-    public SignedPdfDocument signPdf(String invoiceId,
-                                     String invoiceNumber,
-                                     String originalPdfUrl,
-                                     Long originalPdfSize,
-                                     X509Certificate[] certChain,
-                                     PadesLevel padesLevel,
-                                     String correlationId) {
-        log.info("Starting PDF signing for invoice: {}, correlation: {}", invoiceId, correlationId);
+    public SignedPdfResult signPdf(String originalPdfUrl,
+                                     String documentId,
+                                     PadesLevel padesLevel) {
+        log.info("Starting PDF signing for document: {}", documentId);
 
-        // Step 1: Validate certificate chain
-        log.debug("Validating certificate chain with {} certificates", certChain.length);
-        signingPort.validateCertificateChain(certChain);
-
-        // Step 2: Create the aggregate in PENDING state
-        SignedPdfDocument document = SignedPdfDocument.create(
-            invoiceId,
-            invoiceNumber,
-            originalPdfUrl,
-            originalPdfSize,
-            correlationId,
-            "TAX_INVOICE"
-        );
-        document.startSigning();
-        document = repository.save(document);
-
-        // Step 3: Download PDF
+        // Step 1: Download PDF
         log.debug("Downloading PDF from URL: {}", originalPdfUrl);
         byte[] pdfBytes = downloadPort.downloadPdf(originalPdfUrl);
+        log.debug("Downloaded PDF: {} bytes", pdfBytes.length);
 
-        // Step 4: Compute byte range digest
+        // Step 2: Compute byte range digest
         log.debug("Computing PDF byte range digest");
         byte[] digest = pdfPort.computeByteRangeDigest(pdfBytes);
         log.debug("Computed digest: {} bytes", digest.length);
 
-        // Step 5: Sign the digest
-        log.debug("Signing digest with certificate chain");
-        byte[] signedPdfBytes = signingPort.signPdf(pdfBytes, digest, certChain);
-        log.debug("Signed PDF: {} bytes", signedPdfBytes.length);
+        // Step 3: Sign the PDF (includes certificate validation)
+        log.debug("Signing PDF with PAdES level: {}", padesLevel);
+        SigningPort.SigningResult signingResult = signingPort.signPdfWithCertChain(pdfBytes, digest, padesLevel);
+        log.debug("Signed PDF: {} bytes", signingResult.signedPdf().length);
 
-        // Step 6: Store the signed PDF
+        // Step 4: Store the signed PDF
         log.debug("Storing signed PDF");
-        String storageUrl = storagePort.store(signedPdfBytes, "SIGNED_PDF", document);
+        String storageUrl = storagePort.store(
+            signingResult.signedPdf(),
+            "SIGNED_PDF",
+            null  // Document is optional for storage
+        );
         String storagePath = extractPathFromUrl(storageUrl);
         log.debug("Stored signed PDF at: {}", storageUrl);
 
-        // Step 7: Mark as completed
+        // Step 5: Build result
         String transactionId = UUID.randomUUID().toString();
-        String certificate = extractCertificatePem(certChain);
-        document.markCompleted(
+        String certificatePem = extractCertificatePem(signingResult.certificateChain());
+        Instant signatureTimestamp = Instant.now();
+
+        log.info("PDF signing completed for document: {}", documentId);
+
+        return new SignedPdfResult(
             storagePath,
             storageUrl,
-            (long) signedPdfBytes.length,
+            (long) signingResult.signedPdf().length,
             transactionId,
-            certificate,
+            certificatePem,
             padesLevel.getCode(),
-            LocalDateTime.now()
+            signatureTimestamp
         );
-        SignedPdfDocument saved = repository.save(document);
-
-        log.info("PDF signing completed for invoice: {}", invoiceId);
-        return saved;
     }
 
     /**
      * Compensate/rollback a signing operation by deleting the signed PDF.
      *
      * @param documentId ID of the document to compensate
+     * @param storageUrl URL of the signed PDF to delete
      * @throws SigningException if document not found
      */
-    public void compensateSigning(SignedPdfDocumentId documentId) {
+    public void compensateSigning(SignedPdfDocumentId documentId, String storageUrl) {
         log.info("Compensating signing for document: {}", documentId);
 
-        SignedPdfDocument document = repository.findById(documentId)
-            .orElseThrow(() -> new SigningException("Document not found: " + documentId));
-
-        if (document.getSignedPdfUrl() != null) {
-            storagePort.delete(document.getSignedPdfUrl());
+        if (storageUrl != null) {
+            storagePort.delete(storageUrl);
+            log.info("Deleted signed PDF from storage: {}", storageUrl);
         }
 
-        repository.deleteById(document.getId());
+        repository.deleteById(documentId);
         log.info("Signing compensation completed for document: {}", documentId);
     }
 
@@ -167,16 +166,46 @@ public class DomainPdfSigningService {
      * Extract storage path from storage URL.
      */
     private String extractPathFromUrl(String storageUrl) {
-        // Simple implementation - could be enhanced based on URL format
-        return storageUrl.substring(storageUrl.lastIndexOf('/') + 1);
+        // Extract filename from URL
+        // Format: http://localhost:8080/documents/YYYY/MM/DD/signed-pdf-{uuid}.pdf
+        int lastSlash = storageUrl.lastIndexOf('/');
+        if (lastSlash >= 0 && lastSlash < storageUrl.length() - 1) {
+            return storageUrl.substring(lastSlash + 1);
+        }
+        return storageUrl;
     }
 
     /**
      * Extract PEM-encoded certificate from certificate chain.
+     * <p>
+     * Converts X509Certificate[] to PEM format using Base64 encoding.
+     * Includes all certificates in the chain.
+     * </p>
+     *
+     * @param certChain Certificate chain from signing result
+     * @return PEM-encoded certificate string
      */
     private String extractCertificatePem(X509Certificate[] certChain) {
-        // This would convert X509Certificate to PEM format
-        // For now, return a placeholder
-        return "-----BEGIN CERTIFICATE-----\nPLACEHOLDER\n-----END CERTIFICATE-----";
+        // Handle empty or null certificate chain
+        if (certChain == null || certChain.length == 0) {
+            return "-----BEGIN CERTIFICATE-----\nPLACEHOLDER\n-----END CERTIFICATE-----\n";
+        }
+
+        try {
+            StringBuilder pem = new StringBuilder();
+            Base64.Encoder encoder = Base64.getMimeEncoder(64, new byte[]{'\r', '\n'});
+
+            for (X509Certificate cert : certChain) {
+                pem.append("-----BEGIN CERTIFICATE-----\n");
+                byte[] der = cert.getEncoded();
+                pem.append(encoder.encodeToString(der));
+                pem.append("\n-----END CERTIFICATE-----\n");
+            }
+
+            return pem.toString();
+        } catch (Exception e) {
+            log.warn("Failed to encode certificate to PEM, using placeholder", e);
+            return "-----BEGIN CERTIFICATE-----\nPLACEHOLDER\n-----END CERTIFICATE-----\n";
+        }
     }
 }

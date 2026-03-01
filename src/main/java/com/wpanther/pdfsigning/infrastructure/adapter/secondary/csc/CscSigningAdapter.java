@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.secondary.csc;
 
+import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SigningException;
 import com.wpanther.pdfsigning.domain.port.SigningPort;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
@@ -56,7 +57,15 @@ public class CscSigningAdapter implements SigningPort {
 
     @Override
     public byte[] signPdf(byte[] pdfBytes, byte[] digest, X509Certificate[] certChain) {
-        log.debug("Starting CSC signing process for {} certificates", certChain.length);
+        log.debug("Starting CSC signing process (deprecated method)");
+        // Call new method with default BASELINE_B level
+        SigningResult result = signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B);
+        return result.signedPdf();
+    }
+
+    @Override
+    public SigningResult signPdfWithCertChain(byte[] pdfBytes, byte[] digest, PadesLevel padesLevel) {
+        log.debug("Starting CSC signing process with PAdES level: {}", padesLevel);
 
         try {
             // Step 1: Authorize with CSC API to get SAD token
@@ -98,7 +107,12 @@ public class CscSigningAdapter implements SigningPort {
             );
             log.debug("Parsed certificate chain: {} certificates", responseCertChain.length);
 
-            // Step 5: Build CMS/PKCS#7 signature
+            // Step 5: Validate certificate chain (security critical)
+            log.debug("Validating certificate chain");
+            certificateValidator.validateChain(responseCertChain);
+            log.debug("Certificate chain validated successfully");
+
+            // Step 6: Build CMS/PKCS#7 signature
             log.debug("Building CMS/PKCS#7 signature");
             byte[] rawSignature = Base64.getDecoder().decode(signResponse.getSignatures()[0]);
             byte[] cmsSignature = signatureEmbedder.buildCmsSignature(
@@ -108,12 +122,13 @@ public class CscSigningAdapter implements SigningPort {
             );
             log.debug("Built CMS signature: {} bytes", cmsSignature.length);
 
-            // Step 6: Embed signature into PDF
+            // Step 7: Embed signature into PDF
             log.debug("Embedding signature into PDF");
             byte[] signedPdf = signatureEmbedder.embedSignature(pdfBytes, cmsSignature);
             log.debug("Embedded signature, signed PDF size: {} bytes", signedPdf.length);
 
-            return signedPdf;
+            // Return both signed PDF and certificate chain
+            return new SigningResult(signedPdf, responseCertChain);
 
         } catch (Exception e) {
             log.error("Failed to sign PDF with CSC API", e);

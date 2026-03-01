@@ -2,22 +2,21 @@ package com.wpanther.pdfsigning.application.service;
 
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
+import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.domain.service.PdfSigningService;
-import com.wpanther.pdfsigning.domain.service.SignedPdfStorageProvider;
+import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,10 +35,7 @@ class SagaCommandHandlerTest {
     private SignedPdfDocumentRepository documentRepository;
 
     @Mock
-    private PdfSigningService signingService;
-
-    @Mock
-    private SignedPdfStorageProvider storageProvider;
+    private DomainPdfSigningService domainPdfSigningService;
 
     @Mock
     private PdfSigningEventPublisher eventPublisher;
@@ -70,25 +66,32 @@ class SagaCommandHandlerTest {
             return doc;
         });
 
-        PdfSigningService.SignedPdfResult result = new PdfSigningService.SignedPdfResult(
-            "/storage/signed/file.pdf",
+        DomainPdfSigningService.SignedPdfResult result = new DomainPdfSigningService.SignedPdfResult(
+            "signed-file.pdf",
             "http://example.com/signed.pdf",
             54321L,
             "txn-abc",
             "PEM-CERT",
-            "PAdES-BASELINE-T",
-            LocalDateTime.now()
+            "PAdES-BASELINE-B",
+            Instant.now()
         );
 
-        when(signingService.signPdf(eq("http://example.com/file.pdf"), any()))
-            .thenReturn(result);
+        when(domainPdfSigningService.signPdf(
+            eq("http://example.com/file.pdf"),
+            anyString(),
+            eq(PadesLevel.BASELINE_B)
+        )).thenReturn(result);
 
         // When
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
         verify(documentRepository, times(2)).save(any(SignedPdfDocument.class));
-        verify(signingService).signPdf(eq("http://example.com/file.pdf"), any());
+        verify(domainPdfSigningService).signPdf(
+            eq("http://example.com/file.pdf"),
+            anyString(),
+            eq(PadesLevel.BASELINE_B)
+        );
         verify(eventPublisher).publishSuccess(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
@@ -101,7 +104,7 @@ class SagaCommandHandlerTest {
             eq(54321L),
             eq("txn-abc"),
             eq("PEM-CERT"),
-            eq("PAdES-BASELINE-T"),
+            eq("PAdES-BASELINE-B"),
             any() // signatureTimestamp
         );
     }
@@ -124,13 +127,13 @@ class SagaCommandHandlerTest {
         );
         completedDocument.startSigning();
         completedDocument.markCompleted(
-            "/storage/signed/file.pdf",
+            "signed-file.pdf",
             "http://example.com/signed.pdf",
             54321L,
             "txn-abc",
             "PEM-CERT",
-            "PAdES-BASELINE-T",
-            LocalDateTime.now()
+            "PAdES-BASELINE-B",
+            java.time.LocalDateTime.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(completedDocument));
@@ -139,7 +142,7 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
-        verify(signingService, never()).signPdf(any(), any());
+        verify(domainPdfSigningService, never()).signPdf(any(), any(), any());
         verify(eventPublisher).publishSuccess(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
@@ -152,7 +155,7 @@ class SagaCommandHandlerTest {
             eq(54321L),
             eq("txn-abc"),
             eq("PEM-CERT"),
-            eq("PAdES-BASELINE-T"),
+            eq("PAdES-BASELINE-B"),
             any() // signatureTimestamp
         );
     }
@@ -173,23 +176,23 @@ class SagaCommandHandlerTest {
         );
         document.startSigning();
         document.markCompleted(
-            "/storage/signed/file.pdf",
+            "signed-file.pdf",
             "http://example.com/signed.pdf",
             54321L,
             "txn-abc",
             "PEM-CERT",
-            "PAdES-BASELINE-T",
-            LocalDateTime.now()
+            "PAdES-BASELINE-B",
+            java.time.LocalDateTime.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(document));
-        doNothing().when(documentRepository).deleteById(any());
+        doNothing().when(domainPdfSigningService).compensateSigning(any(SignedPdfDocumentId.class), anyString());
 
         // When
         sagaCommandHandler.handleCompensation(command);
 
         // Then
-        verify(documentRepository).deleteById(document.getId());
+        verify(domainPdfSigningService).compensateSigning(eq(document.getId()), eq("http://example.com/signed.pdf"));
         verify(eventPublisher).publishCompensated(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
@@ -212,7 +215,7 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleCompensation(command);
 
         // Then
-        verify(documentRepository, never()).deleteById(any());
+        verify(domainPdfSigningService, never()).compensateSigning(any(), any());
         verify(eventPublisher).publishCompensated(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
@@ -237,13 +240,13 @@ class SagaCommandHandlerTest {
         );
         completedDocument.startSigning();
         completedDocument.markCompleted(
-            "/storage/signed/file.pdf",
+            "signed-file.pdf",
             "http://example.com/signed.pdf",
             54321L,
             "txn-abc",
             "PEM-CERT",
-            "PAdES-BASELINE-T",
-            LocalDateTime.now()
+            "PAdES-BASELINE-B",
+            java.time.LocalDateTime.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(completedDocument));
@@ -264,7 +267,7 @@ class SagaCommandHandlerTest {
             eq(54321L),
             eq("txn-abc"),
             eq("PEM-CERT"),
-            eq("PAdES-BASELINE-T"),
+            eq("PAdES-BASELINE-B"),
             any()
         );
     }
@@ -329,7 +332,7 @@ class SagaCommandHandlerTest {
             eq("INVOICE"),
             eq("Maximum retry attempts exceeded for PDF signing")
         );
-        verify(signingService, never()).signPdf(any(), any());
+        verify(domainPdfSigningService, never()).signPdf(any(), any(), any());
     }
 
     @Test
@@ -350,7 +353,7 @@ class SagaCommandHandlerTest {
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.empty());
         when(documentRepository.save(any(SignedPdfDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(signingService.signPdf(any(), any()))
+        when(domainPdfSigningService.signPdf(any(), any(), any()))
             .thenThrow(new RuntimeException("Signing failed"));
 
         // When
@@ -365,48 +368,6 @@ class SagaCommandHandlerTest {
             eq("INV-2024-001"),
             eq("INVOICE"),
             eq("Signing failed")
-        );
-    }
-
-    @Test
-    @DisplayName("Should handle storage deletion exception during compensation")
-    void shouldHandleStorageDeletionException() {
-        // Given
-        CompensatePdfSigningCommand command = new CompensatePdfSigningCommand(
-            "saga-123", SagaStep.SIGN_PDF, "corr-456",
-            "doc-789", "INVOICE", "sign-pdf"
-        );
-
-        SignedPdfDocument document = SignedPdfDocument.create(
-            "doc-789", "INV-2024-001",
-            "http://example.com/file.pdf", 12345L,
-            "corr-456", "INVOICE"
-        );
-        document.startSigning();
-        document.markCompleted(
-            "/storage/signed/file.pdf",
-            "http://example.com/signed.pdf",
-            54321L,
-            "txn-abc",
-            "PEM-CERT",
-            "PAdES-BASELINE-T",
-            LocalDateTime.now()
-        );
-
-        when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(document));
-        doThrow(new RuntimeException("Storage delete failed"))
-            .when(storageProvider).delete("/storage/signed/file.pdf");
-        doNothing().when(documentRepository).deleteById(any());
-
-        // When
-        sagaCommandHandler.handleCompensation(command);
-
-        // Then - should still complete compensation and delete from database
-        verify(documentRepository).deleteById(document.getId());
-        verify(eventPublisher).publishCompensated(
-            eq("saga-123"),
-            eq(SagaStep.SIGN_PDF),
-            eq("corr-456")
         );
     }
 
@@ -426,18 +387,18 @@ class SagaCommandHandlerTest {
         );
         document.startSigning();
         document.markCompleted(
-            "/storage/signed/file.pdf",
+            "signed-file.pdf",
             "http://example.com/signed.pdf",
             54321L,
             "txn-abc",
             "PEM-CERT",
-            "PAdES-BASELINE-T",
-            LocalDateTime.now()
+            "PAdES-BASELINE-B",
+            java.time.LocalDateTime.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(document));
-        doThrow(new RuntimeException("Database delete failed"))
-            .when(documentRepository).deleteById(any());
+        doThrow(new RuntimeException("Compensation failed"))
+            .when(domainPdfSigningService).compensateSigning(any(SignedPdfDocumentId.class), anyString());
 
         // When
         sagaCommandHandler.handleCompensation(command);
@@ -450,7 +411,7 @@ class SagaCommandHandlerTest {
             eq("doc-789"),
             eq(""),
             eq("INVOICE"),
-            eq("Compensation failed: Database delete failed")
+            eq("Compensation failed: Compensation failed")
         );
     }
 }

@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.domain.port;
 
+import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SigningException;
 
 import java.security.cert.X509Certificate;
@@ -21,8 +22,29 @@ public interface SigningPort {
      * @param certChain Certificate chain for signature
      * @return Signed PDF bytes
      * @throws SigningException if signing fails
+     * @deprecated Use {@link #signPdfWithCertChain(byte[], byte[], PadesLevel)} instead
      */
+    @Deprecated
     byte[] signPdf(byte[] pdfBytes, byte[] digest, X509Certificate[] certChain) throws SigningException;
+
+    /**
+     * Sign a PDF with PAdES signature and return certificate chain.
+     * <p>
+     * This method:
+     * <ol>
+     *   <li>Validates the certificate chain</li>
+     *   <li>Signs the PDF using the configured PAdES level</li>
+     *   <li>Returns both signed PDF and certificate chain for PEM encoding</li>
+     * </ol>
+     * </p>
+     *
+     * @param pdfBytes   Original PDF bytes
+     * @param digest     Pre-computed SHA-256 digest of PDF byte range
+     * @param padesLevel Desired PAdES conformance level
+     * @return SigningResult containing signed PDF and certificate chain
+     * @throws SigningException if signing fails
+     */
+    SigningResult signPdfWithCertChain(byte[] pdfBytes, byte[] digest, PadesLevel padesLevel) throws SigningException;
 
     /**
      * Validate certificate chain for signing purposes.
@@ -31,4 +53,12 @@ public interface SigningPort {
      * @throws SigningException if validation fails
      */
     void validateCertificateChain(X509Certificate[] certChain) throws SigningException;
+
+    /**
+     * Result of signing operation containing both signed PDF and certificate chain.
+     */
+    record SigningResult(
+        byte[] signedPdf,
+        X509Certificate[] certificateChain
+    ) {}
 }

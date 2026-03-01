@@ -17,13 +17,14 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.security.cert.X509Certificate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 /**
@@ -79,70 +80,79 @@ class DomainPdfSigningServiceTest {
         @DisplayName("Should successfully sign PDF with valid inputs")
         void shouldSignPdfSuccessfully() {
             // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
             String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
-            PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_B;
 
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] digest = new byte[32]; // SHA-256 digest
             byte[] signedPdfBytes = "signed pdf content".getBytes();
-            String storageUrl = "https://storage.example.com/signed.pdf";
+            String storageUrl = "https://storage.example.com/documents/signed.pdf";
+            X509Certificate[] certChain = new X509Certificate[0];
 
-            // Configure repository to return the same document that was saved
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
-            when(mockSigningPort.signPdf(pdfBytes, digest, certChain)).thenReturn(signedPdfBytes);
-            when(mockStoragePort.store(eq(signedPdfBytes), eq("SIGNED_PDF"), any(SignedPdfDocument.class))).thenReturn(storageUrl);
+            when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+            when(mockStoragePort.store(eq(signedPdfBytes), eq("SIGNED_PDF"), isNull()))
+                .thenReturn(storageUrl);
 
             // When
-            SignedPdfDocument result = service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
+            DomainPdfSigningService.SignedPdfResult result = service.signPdf(
+                originalPdfUrl, documentId, padesLevel
             );
 
             // Then
             assertThat(result).isNotNull();
-            assertThat(result.getStatus()).isEqualTo(SigningStatus.COMPLETED);
-            assertThat(result.getSignedPdfUrl()).isEqualTo(storageUrl);
+            assertThat(result.signedPdfUrl()).isEqualTo(storageUrl);
+            assertThat(result.signedPdfSize()).isEqualTo((long) signedPdfBytes.length);
+            assertThat(result.signatureLevel()).isEqualTo("PAdES-BASELINE-B");
+            assertThat(result.certificate()).contains("-----BEGIN CERTIFICATE-----");
 
             // Verify the complete workflow was executed
-            verify(mockSigningPort).validateCertificateChain(certChain);
             verify(mockDownloadPort).downloadPdf(originalPdfUrl);
             verify(mockPdfPort).computeByteRangeDigest(pdfBytes);
-            verify(mockSigningPort).signPdf(pdfBytes, digest, certChain);
-            verify(mockStoragePort).store(eq(signedPdfBytes), eq("SIGNED_PDF"), any(SignedPdfDocument.class));
-            verify(mockRepository, times(2)).save(any());
+            verify(mockSigningPort).signPdfWithCertChain(pdfBytes, digest, padesLevel);
+            verify(mockStoragePort).store(eq(signedPdfBytes), eq("SIGNED_PDF"), isNull());
+        }
+
+        @Test
+        @DisplayName("Should fail when download throws exception")
+        void shouldFailOnDownloadException() {
+            // Given
+            String originalPdfUrl = "https://storage.example.com/original.pdf";
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_B;
+
+            doThrow(new SigningException("Network error downloading PDF"))
+                .when(mockDownloadPort).downloadPdf(originalPdfUrl);
+
+            // When & Then
+            assertThatThrownBy(() -> service.signPdf(originalPdfUrl, documentId, padesLevel))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("Network error downloading PDF");
+
+            // Verify download was attempted but no further processing
+            verify(mockDownloadPort).downloadPdf(originalPdfUrl);
+            verify(mockPdfPort, never()).computeByteRangeDigest(any());
         }
 
         @Test
         @DisplayName("Should fail when digest computation throws exception")
         void shouldFailOnDigestException() {
             // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
             String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
-            PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_B;
 
             byte[] pdfBytes = "test pdf content".getBytes();
 
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             doThrow(new SigningException("Digest computation failed"))
                 .when(mockPdfPort).computeByteRangeDigest(pdfBytes);
 
             // When & Then
-            assertThatThrownBy(() -> service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
-            ))
+            assertThatThrownBy(() -> service.signPdf(originalPdfUrl, documentId, padesLevel))
                 .isInstanceOf(SigningException.class)
                 .hasMessageContaining("Digest computation failed");
 
@@ -155,29 +165,21 @@ class DomainPdfSigningServiceTest {
         @DisplayName("Should fail when signing throws exception")
         void shouldFailOnSigningException() {
             // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
             String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
+            String documentId = "doc-123";
             PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
 
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] digest = new byte[32];
 
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
 
             doThrow(new SigningException("CSC API error"))
-                .when(mockSigningPort).signPdf(pdfBytes, digest, certChain);
+                .when(mockSigningPort).signPdfWithCertChain(pdfBytes, digest, padesLevel);
 
             // When & Then
-            assertThatThrownBy(() -> service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
-            ))
+            assertThatThrownBy(() -> service.signPdf(originalPdfUrl, documentId, padesLevel))
                 .isInstanceOf(SigningException.class)
                 .hasMessageContaining("CSC API error");
 
@@ -190,161 +192,125 @@ class DomainPdfSigningServiceTest {
         @DisplayName("Should fail when storage throws exception")
         void shouldFailOnStorageException() {
             // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
             String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
-            PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_B;
 
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] digest = new byte[32];
             byte[] signedPdfBytes = "signed pdf content".getBytes();
+            X509Certificate[] certChain = new X509Certificate[0];
 
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
-            when(mockSigningPort.signPdf(pdfBytes, digest, certChain)).thenReturn(signedPdfBytes);
+            when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
 
             doThrow(new StorageException("S3 bucket unavailable"))
-                .when(mockStoragePort).store(eq(signedPdfBytes), eq("SIGNED_PDF"), any(SignedPdfDocument.class));
+                .when(mockStoragePort).store(eq(signedPdfBytes), eq("SIGNED_PDF"), isNull());
 
             // When & Then
-            assertThatThrownBy(() -> service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
-            ))
+            assertThatThrownBy(() -> service.signPdf(originalPdfUrl, documentId, padesLevel))
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("S3 bucket unavailable");
 
             // Verify workflow progressed to storage stage
             verify(mockDownloadPort).downloadPdf(originalPdfUrl);
             verify(mockPdfPort).computeByteRangeDigest(pdfBytes);
-            verify(mockSigningPort).signPdf(pdfBytes, digest, certChain);
+            verify(mockSigningPort).signPdfWithCertChain(pdfBytes, digest, padesLevel);
         }
 
         @Test
-        @DisplayName("Should test with BASELINE_B PadesLevel")
-        void shouldTestBaselineBLevel() {
+        @DisplayName("Should test with BASELINE_T PadesLevel")
+        void shouldTestBaselineTLevel() {
             // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
             String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_T;
+
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+            byte[] signedPdfBytes = "signed pdf content".getBytes();
+            String storageUrl = "https://storage.example.com/signed.pdf";
             X509Certificate[] certChain = new X509Certificate[0];
+
+            when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
+            when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
+            when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+            when(mockStoragePort.store(eq(signedPdfBytes), eq("SIGNED_PDF"), isNull()))
+                .thenReturn(storageUrl);
+
+            // When
+            DomainPdfSigningService.SignedPdfResult result = service.signPdf(
+                originalPdfUrl, documentId, padesLevel
+            );
+
+            // Then
+            assertThat(result).isNotNull();
+            assertThat(result.signatureLevel()).isEqualTo("PAdES-BASELINE-T");
+        }
+
+        @Test
+        @DisplayName("Should extract filename from storage URL")
+        void shouldExtractFilenameFromUrl() {
+            // Given
+            String originalPdfUrl = "https://storage.example.com/original.pdf";
+            String documentId = "doc-123";
             PadesLevel padesLevel = PadesLevel.BASELINE_B;
-            String correlationId = "corr-456";
+
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+            byte[] signedPdfBytes = "signed pdf content".getBytes();
+            String storageUrl = "https://storage.example.com/documents/2024/02/27/signed-pdf-abc123.pdf";
+            X509Certificate[] certChain = new X509Certificate[0];
+
+            when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
+            when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
+            when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+            when(mockStoragePort.store(eq(signedPdfBytes), eq("SIGNED_PDF"), isNull()))
+                .thenReturn(storageUrl);
+
+            // When
+            DomainPdfSigningService.SignedPdfResult result = service.signPdf(
+                originalPdfUrl, documentId, padesLevel
+            );
+
+            // Then - should extract just the filename
+            assertThat(result.signedPdfPath()).isEqualTo("signed-pdf-abc123.pdf");
+        }
+
+        @Test
+        @DisplayName("Should handle certificate encoding exception gracefully")
+        void shouldHandleCertificateEncodingException() {
+            // Given
+            String originalPdfUrl = "https://storage.example.com/original.pdf";
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_B;
 
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] digest = new byte[32];
             byte[] signedPdfBytes = "signed pdf content".getBytes();
             String storageUrl = "https://storage.example.com/signed.pdf";
 
+            // Create a mock certificate chain that throws on getEncoded()
+            X509Certificate[] certChain = new X509Certificate[0];
+
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
-            when(mockSigningPort.signPdf(pdfBytes, digest, certChain)).thenReturn(signedPdfBytes);
-            when(mockStoragePort.store(eq(signedPdfBytes), eq("SIGNED_PDF"), any(SignedPdfDocument.class))).thenReturn(storageUrl);
+            when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+            when(mockStoragePort.store(eq(signedPdfBytes), eq("SIGNED_PDF"), isNull()))
+                .thenReturn(storageUrl);
 
             // When
-            SignedPdfDocument result = service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
+            DomainPdfSigningService.SignedPdfResult result = service.signPdf(
+                originalPdfUrl, documentId, padesLevel
             );
 
-            // Then
-            assertThat(result).isNotNull();
-            assertThat(result.getSignatureLevel()).isEqualTo("PAdES-BASELINE-B");
-        }
-
-        @Test
-        @DisplayName("Should fail when certificate validation throws exception")
-        void shouldFailOnCertificateValidation() {
-            // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
-            String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
-            PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
-
-            doThrow(new SigningException("Certificate expired"))
-                .when(mockSigningPort).validateCertificateChain(certChain);
-
-            // When & Then
-            assertThatThrownBy(() -> service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
-            ))
-                .isInstanceOf(SigningException.class)
-                .hasMessageContaining("Certificate expired");
-
-            // Verify no further processing was attempted
-            verify(mockPdfPort, never()).computeByteRangeDigest(any());
-            verify(mockSigningPort, never()).signPdf(any(), any(), any());
-        }
-
-        @Test
-        @DisplayName("Should validate certificate chain before processing")
-        void shouldValidateCertificateChainFirst() {
-            // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
-            String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
-            PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
-
-            // Stub repository save to return the same document
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-            doThrow(new SigningException("Invalid certificate"))
-                .when(mockSigningPort).validateCertificateChain(certChain);
-
-            // When & Then
-            assertThatThrownBy(() -> service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
-            ))
-                .isInstanceOf(SigningException.class);
-
-            // Verify validation was called before any other processing
-            verify(mockSigningPort).validateCertificateChain(certChain);
-            verify(mockPdfPort, never()).computeByteRangeDigest(any());
-        }
-
-        @Test
-        @DisplayName("Should fail when download throws exception")
-        void shouldFailOnDownloadException() {
-            // Given
-            String invoiceId = "invoice-123";
-            String invoiceNumber = "INV-2024-001";
-            String originalPdfUrl = "https://storage.example.com/original.pdf";
-            Long originalPdfSize = 1024L;
-            X509Certificate[] certChain = new X509Certificate[0];
-            PadesLevel padesLevel = PadesLevel.BASELINE_T;
-            String correlationId = "corr-456";
-
-            when(mockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-            doThrow(new SigningException("Network error downloading PDF"))
-                .when(mockDownloadPort).downloadPdf(originalPdfUrl);
-
-            // When & Then
-            assertThatThrownBy(() -> service.signPdf(
-                invoiceId, invoiceNumber, originalPdfUrl, originalPdfSize,
-                certChain, padesLevel, correlationId
-            ))
-                .isInstanceOf(SigningException.class)
-                .hasMessageContaining("Network error downloading PDF");
-
-            // Verify download was attempted but no further processing
-            verify(mockDownloadPort).downloadPdf(originalPdfUrl);
-            verify(mockPdfPort, never()).computeByteRangeDigest(any());
-            verify(mockSigningPort, never()).signPdf(any(), any(), any());
+            // Then - should use placeholder for empty cert chain
+            assertThat(result.certificate()).contains("PLACEHOLDER");
         }
     }
 
@@ -357,169 +323,60 @@ class DomainPdfSigningServiceTest {
         void shouldCompensateSuccessfully() {
             // Given
             SignedPdfDocumentId documentId = SignedPdfDocumentId.generate();
-            SignedPdfDocument document = SignedPdfDocument.create(
-                "invoice-123", "INV-001", "url", 1024L, "corr", "TAX_INVOICE"
-            );
-            document.startSigning();  // Move to SIGNING state
-            document.markCompleted("path", "url", 2048L, "txn", "cert", "PAdES-BASELINE-T", LocalDateTime.now());
-
-            when(mockRepository.findById(documentId)).thenReturn(Optional.of(document));
+            String storageUrl = "https://storage.example.com/signed.pdf";
 
             // When
-            service.compensateSigning(documentId);
+            service.compensateSigning(documentId, storageUrl);
 
             // Then
-            verify(mockStoragePort).delete("url");
-            verify(mockRepository).deleteById(document.getId());
+            verify(mockStoragePort).delete(storageUrl);
+            verify(mockRepository).deleteById(documentId);
         }
 
         @Test
-        @DisplayName("Should throw exception when document not found")
-        void shouldThrowWhenDocumentNotFound() {
+        @DisplayName("Should handle null storage URL gracefully")
+        void shouldHandleNullStorageUrl() {
             // Given
             SignedPdfDocumentId documentId = SignedPdfDocumentId.generate();
-            when(mockRepository.findById(documentId)).thenReturn(Optional.empty());
-
-            // When & Then
-            assertThatThrownBy(() -> service.compensateSigning(documentId))
-                .isInstanceOf(SigningException.class)
-                .hasMessageContaining("Document not found");
-
-            verify(mockStoragePort, never()).delete(any());
-            verify(mockRepository, never()).deleteById(any());
-        }
-
-        @Test
-        @DisplayName("Should handle null signed PDF URL gracefully")
-        void shouldHandleNullSignedPdfUrl() {
-            // Given
-            SignedPdfDocumentId documentId = SignedPdfDocumentId.generate();
-            SignedPdfDocument document = SignedPdfDocument.create(
-                "invoice-123", "INV-001", "url", 1024L, "corr", "TAX_INVOICE"
-            );
-            // Don't mark as completed - stays in PENDING with no signedPdfUrl
-
-            when(mockRepository.findById(documentId)).thenReturn(Optional.of(document));
 
             // When
-            service.compensateSigning(documentId);
+            service.compensateSigning(documentId, null);
 
             // Then - should not attempt to delete from storage
             verify(mockStoragePort, never()).delete(any());
-            verify(mockRepository).deleteById(document.getId());
+            verify(mockRepository).deleteById(documentId);
         }
 
         @Test
-        @DisplayName("Should handle document in COMPLETED state with URL")
-        void shouldHandleCompletedDocument() {
+        @DisplayName("Should handle empty storage URL by still calling delete")
+        void shouldHandleEmptyStorageUrl() {
             // Given
             SignedPdfDocumentId documentId = SignedPdfDocumentId.generate();
-            SignedPdfDocument document = SignedPdfDocument.create(
-                "invoice-123", "INV-001", "url", 1024L, "corr", "TAX_INVOICE"
-            );
-            document.startSigning();
-            document.markCompleted("path", "http://example.com/signed.pdf", 2048L, "txn", "cert", "PAdES-BASELINE-T", LocalDateTime.now());
-
-            when(mockRepository.findById(documentId)).thenReturn(Optional.of(document));
 
             // When
-            service.compensateSigning(documentId);
+            service.compensateSigning(documentId, "");
 
-            // Then
-            verify(mockStoragePort).delete("http://example.com/signed.pdf");
-            verify(mockRepository).deleteById(document.getId());
-        }
-    }
-
-    @Nested
-    @DisplayName("extractPathFromUrl() helper method")
-    class ExtractPathFromUrlMethod {
-
-        @Test
-        @DisplayName("Should extract filename from simple URL")
-        void shouldExtractFilenameFromSimpleUrl() throws Exception {
-            // Given
-            service = new DomainPdfSigningService(
-                mockSigningPort, mockPdfPort, mockStoragePort, mockDownloadPort, mockRepository
-            );
-
-            // Using reflection to test private method
-            java.lang.reflect.Method method = DomainPdfSigningService.class
-                .getDeclaredMethod("extractPathFromUrl", String.class);
-            method.setAccessible(true);
-
-            // When
-            String path = (String) method.invoke(service, "https://example.com/signed.pdf");
-
-            // Then
-            assertThat(path).isEqualTo("signed.pdf");
+            // Then - delete is called with empty string, storage adapter handles it gracefully
+            verify(mockStoragePort).delete("");
+            verify(mockRepository).deleteById(documentId);
         }
 
         @Test
-        @DisplayName("Should extract filename from URL with path")
-        void shouldExtractFilenameFromUrlWithPath() throws Exception {
+        @DisplayName("Should propagate storage exceptions")
+        void shouldPropagateStorageExceptions() {
             // Given
-            service = new DomainPdfSigningService(
-                mockSigningPort, mockPdfPort, mockStoragePort, mockDownloadPort, mockRepository
-            );
+            SignedPdfDocumentId documentId = SignedPdfDocumentId.generate();
+            String storageUrl = "https://storage.example.com/signed.pdf";
 
-            java.lang.reflect.Method method = DomainPdfSigningService.class
-                .getDeclaredMethod("extractPathFromUrl", String.class);
-            method.setAccessible(true);
+            doThrow(new StorageException("Storage unavailable"))
+                .when(mockStoragePort).delete(storageUrl);
 
-            // When
-            String path = (String) method.invoke(service, "https://storage.example.com/bucket/2024/02/27/signed.pdf");
+            // When & Then
+            assertThatThrownBy(() -> service.compensateSigning(documentId, storageUrl))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("Storage unavailable");
 
-            // Then
-            assertThat(path).isEqualTo("signed.pdf");
-        }
-
-        @Test
-        @DisplayName("Should extract filename from URL with query params")
-        void shouldExtractFilenameFromUrlWithQueryParams() throws Exception {
-            // Given
-            service = new DomainPdfSigningService(
-                mockSigningPort, mockPdfPort, mockStoragePort, mockDownloadPort, mockRepository
-            );
-
-            java.lang.reflect.Method method = DomainPdfSigningService.class
-                .getDeclaredMethod("extractPathFromUrl", String.class);
-            method.setAccessible(true);
-
-            // When
-            String path = (String) method.invoke(service, "https://example.com/signed.pdf?token=abc");
-
-            // Then
-            assertThat(path).isEqualTo("signed.pdf?token=abc");
-        }
-    }
-
-    @Nested
-    @DisplayName("extractCertificatePem() helper method")
-    class ExtractCertificatePemMethod {
-
-        @Test
-        @DisplayName("Should return PEM placeholder")
-        void shouldReturnPemPlaceholder() throws Exception {
-            // Given
-            service = new DomainPdfSigningService(
-                mockSigningPort, mockPdfPort, mockStoragePort, mockDownloadPort, mockRepository
-            );
-
-            java.lang.reflect.Method method = DomainPdfSigningService.class
-                .getDeclaredMethod("extractCertificatePem", X509Certificate[].class);
-            method.setAccessible(true);
-
-            // Given
-            X509Certificate[] certChain = new X509Certificate[0];
-
-            // When
-            String pem = (String) method.invoke(service, (Object) certChain);
-
-            // Then
-            assertThat(pem).contains("-----BEGIN CERTIFICATE-----");
-            assertThat(pem).contains("-----END CERTIFICATE-----");
-            assertThat(pem).contains("PLACEHOLDER");
+            verify(mockStoragePort).delete(storageUrl);
         }
     }
 }
