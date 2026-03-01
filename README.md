@@ -218,6 +218,7 @@ PENDING → SIGNING → COMPLETED
 | `CSC_SERVICE_URL` | eidasremotesigning URL | `http://localhost:9000` |
 | `CSC_CREDENTIAL_ID` | CSC credential ID | `default-credential` |
 | `CSC_CLIENT_ID` | CSC client ID | `pdf-signing-service` |
+| `CSC_HASH_ALGO` | Hash algorithm (SHA256, SHA384, SHA512) | `SHA256` |
 | `PADES_LEVEL` | PAdES conformance level | `BASELINE_B` |
 | `STORAGE_PROVIDER` | Storage backend (`local` or `s3`) | `local` |
 | `SIGNED_PDF_STORAGE_PATH` | Local storage path for signed PDFs | `/var/signed-documents` |
@@ -229,37 +230,65 @@ PENDING → SIGNING → COMPLETED
 | `S3_ENDPOINT` | Custom S3/MinIO endpoint | `http://localhost:9100` |
 | `S3_PATH_STYLE_ACCESS` | Force path-style S3 access | `true` |
 | `S3_BASE_URL` | Public S3 base URL | `http://localhost:9100/etax-signed-pdfs` |
-| `SIGNING_MAX_RETRIES` | Maximum retry attempts | `3` |
+| `SIGNING_MAX_RETRIES` | Maximum retry attempts (0-10) | `3` |
 | `OUTBOX_CLEANUP_ENABLED` | Enable outbox cleanup job | `false` |
 
-### Application Configuration
+### Application Properties
 
+The service uses typed `@ConfigurationProperties` classes with JSR-303 validation:
+
+**CscProperties** (`app.csc.*`):
+```yaml
+app:
+  csc:
+    client-id: pdf-signing-service      # OAuth2 client ID
+    credential-id: default-credential   # Required: Signing credential ID
+    hash-algo: SHA256                   # SHA256, SHA384, or SHA512
+    cert-validation:
+      enabled: true                     # Enable certificate validation
+      max-validity-days: 365            # Max cert validity (1-3650 days)
+      min-validity-remaining-days: 7    # Min remaining validity (0-365 days)
+    sad-token:
+      min-expiry-seconds: 60            # Min SAD token expiry (1-3600s)
+      max-expiry-seconds: 3600          # Max SAD token expiry (60-86400s)
+```
+
+**KafkaProperties** (`app.kafka.*`):
 ```yaml
 app:
   kafka:
+    bootstrap-servers: localhost:9092   # Required: host:port,host:port
     topics:
-      saga-command: saga.command.pdf-signing
-      saga-compensation: saga.compensation.pdf-signing
-      saga-reply: saga.reply.pdf-signing
-      notification-events: notification.events
-      dlq: pdf.signing.dlq
+      saga-command: saga.command.pdf-signing        # Required
+      saga-compensation: saga.compensation.pdf-signing  # Required
+      saga-reply: saga.reply.pdf-signing            # Required
+      notification-events: notification.events       # Required
+      dlq: pdf.signing.dlq                         # Required
+```
 
-  csc:
-    service-url: http://localhost:9000
-    auth-endpoint: /csc/v2/oauth2/authorize
-    sign-hash-endpoint: /csc/v2/signatures/signHash
-    credential-id: default-credential
-    hash-algo: SHA256
+**StorageProperties** (`app.storage.*`):
+```yaml
+app:
+  storage:
+    provider: local                     # "local" or "s3"
+    local:
+      base-path: /var/signed-documents  # Required for local provider
+      base-url: http://localhost:8087    # Required: HTTP/HTTPS URL
+    s3:
+      bucket-name: etax-signed-pdfs      # Required for S3 provider
+      region: us-east-1                  # Required for S3 provider
+      access-key: minioadmin             # Optional (use IAM roles in prod)
+      secret-key: minioadmin             # Optional (use IAM roles in prod)
+      endpoint: http://localhost:9100    # Optional: HTTP/HTTPS URL
+      path-style-access: true            # Default: false (use true for MinIO)
+      base-url: http://localhost:9100/etax-signed-pdfs  # Optional: HTTP/HTTPS URL
+```
 
-  pades:
-    level: BASELINE_B
-
-saga:
-  outbox:
-    cleanup:
-      enabled: false
-      cron-expression: "0 0 2 * * ?"
-      retention-hours: 24
+**SigningProperties** (`app.signing.*`):
+```yaml
+app:
+  signing:
+    max-retries: 3                      # Max retry attempts (0-10)
 ```
 
 ## Storage Providers
@@ -362,7 +391,7 @@ mvn spring-boot:run
 ### Run Tests
 
 ```bash
-# Run all tests (18 unit tests)
+# Run all tests (266 unit tests)
 mvn test
 
 # Run with coverage (JaCoCo 90% requirement)
@@ -402,28 +431,62 @@ src/main/java/com/wpanther/pdfsigning/
 ├── domain/
 │   ├── model/              # SignedPdfDocument aggregate, PadesLevel enum
 │   ├── repository/         # Repository interfaces
-│   ├── service/            # PdfSigningService, SignedPdfStorageProvider
+│   ├── service/            # DomainPdfSigningService, SigningPort
 │   └── event/              # Saga commands, replies, notifications
 ├── application/
 │   └── service/            # SagaCommandHandler (process + compensate)
 └── infrastructure/
     ├── persistence/        # JPA entities, repositories
     │   └── outbox/         # Outbox pattern (CDC source)
+    ├── adapter/
+    │   ├── primary/        # Kafka consumers, REST endpoints
+    │   │   └── kafka/      # SagaCommandKafkaAdapter
+    │   └── secondary/      # External service integrations
+    │       ├── csc/        # CscSigningAdapter (CSC API)
+    │       ├── download/   # HttpDocumentDownloadAdapter
+    │       ├── pdf/        # PadesSignatureAdapter
+    │       └── storage/    # LocalStorageAdapter, S3StorageAdapter
     ├── client/             # CSC API Feign clients
-    │   └── csc/            # CSC API DTOs
+    │   └── csc/            # CSC API DTOs, validators
     ├── messaging/          # Event publishers (outbox)
     ├── pdf/                # PadesSignatureEmbedder, CertificateParser
-    ├── storage/            # LocalSignedPdfStorageProvider, S3SignedPdfStorageProvider
-    └── config/             # SagaRouteConfig, Feign, etc.
+    └── config/
+        ├── properties/     # @ConfigurationProperties classes
+        │   ├── CscProperties.java
+        │   ├── KafkaProperties.java
+        │   ├── StorageProperties.java
+        │   └── SigningProperties.java
+        └── SagaRouteConfig.java
 ```
 
+### Architecture Patterns
+
+- **Hexagonal Architecture (Ports and Adapters)**: Clean separation between domain and infrastructure
+- **Domain-Driven Design**: Aggregate roots, value objects, repository pattern
+- **Saga Orchestration**: Command/reply pattern with saga orchestrator
+- **Transactional Outbox**: Reliable event publishing via Debezium CDC
+- **Dual-Publishing**: Saga replies (to orchestrator) + notifications (to observer)
+- **Deferred Signing**: PDF byte range digest computed locally, signature via CSC signHash
+
 ## Key Features
+
+### Hexagonal Architecture
+- Clean separation between domain logic and infrastructure
+- Ports define contracts (SigningPort, DocumentStoragePort)
+- Adapters implement ports for external systems
+- Easy to test and swap implementations
 
 ### Pluggable Storage Backends
 - Local filesystem storage (default) with date-based directory structure
 - AWS S3 or MinIO storage support
 - Runtime selection via `STORAGE_PROVIDER` environment variable
-- Consistent `StorageResult` interface across providers
+- Consistent `DocumentStoragePort` interface across providers
+
+### Typed Configuration Properties
+- `@ConfigurationProperties` classes group related configuration
+- JSR-303 validation annotations provide early feedback
+- Type-safe configuration with IDE auto-completion
+- Organized by domain (CSC, Kafka, Storage, Signing)
 
 ### Saga Orchestration
 - Command/reply pattern with saga orchestrator
@@ -444,8 +507,8 @@ src/main/java/com/wpanther/pdfsigning/
 - Already completed documents trigger immediate SUCCESS reply
 
 ### Retry Logic
-- Failed signings retried up to 3 times
-- Configurable retry delay
+- Failed signings retried up to configurable max attempts (default: 3)
+- Configurable via `app.signing.max-retries` property
 
 ### Circuit Breaker
 - Resilience4j circuit breaker protects CSC API calls
