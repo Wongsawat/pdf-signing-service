@@ -96,6 +96,24 @@ class LocalStorageAdapterTest {
             // Then
             assertThat(storageUrl).contains("unknown.pdf");
         }
+
+        @Test
+        @DisplayName("Should throw exception when storage fails")
+        void shouldThrowExceptionWhenStorageFails() {
+            // Given - create adapter with invalid basePath that will fail
+            LocalStorageAdapter failingAdapter = new LocalStorageAdapter(
+                "/nonexistent/path/that/does/not/exist/and/cannot/be/created/1234567890",
+                "http://localhost:8080"
+            );
+
+            byte[] documentData = "test pdf".getBytes();
+            SignedPdfDocument document = createTestDocument();
+
+            // When/Then - should wrap exception in StorageException
+            assertThatThrownBy(() -> failingAdapter.store(documentData, "SIGNED_PDF", document))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
+                .hasMessageContaining("Failed to store document to local filesystem");
+        }
     }
 
     @Nested
@@ -140,6 +158,18 @@ class LocalStorageAdapterTest {
             // When/Then
             byte[] retrieved = adapter.retrieve(storageUrl);
             assertThat(retrieved).isEqualTo(originalData);
+        }
+
+        @Test
+        @DisplayName("Should throw exception on URL with different base")
+        void shouldThrowExceptionOnUrlWithDifferentBase() {
+            // Given - URL from different base (will cause substring to go negative)
+            // Using a URL that starts with baseUrl but is shorter than expected
+            String shortUrl = "http:/";
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.retrieve(shortUrl))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
         }
     }
 

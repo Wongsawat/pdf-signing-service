@@ -12,12 +12,23 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.util.Collections;
 import java.security.cert.X509Certificate;
+import java.util.Date;
+import java.util.Hashtable;
+import java.util.Map;
+
+import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.cms.AttributeTable;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.cms.CMSAttributeTableGenerator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for PadesSignatureEmbedder.
@@ -136,23 +147,6 @@ class PadesSignatureEmbedderTest {
     class BuildCmsSignatureMethod {
 
         @Test
-        @DisplayName("Should build CMS signature with valid inputs")
-        void shouldBuildCmsSignatureWithValidInputs() throws Exception {
-            // Given - This test requires actual X.509 certificates which BouncyCastle must parse
-            // Mock certificates don't work because JcaCertStore needs valid ASN.1 structure
-            // This would need test certificate resources (e.g., src/test/resources/cert.pem)
-            // For now, we test the negative cases which don't require valid certificates
-            byte[] rawSignature = new byte[256];
-            X509Certificate[] certChain = createMockCertificateChain();
-            byte[] digest = new byte[32];
-
-            // When/Then - This will fail with mock certificates, but tests the error path
-            // TODO: Add real test certificates to resources to properly test this method
-            assertThatThrownBy(() -> embedder.buildCmsSignature(rawSignature, certChain, digest))
-                .isInstanceOf(Exception.class);
-        }
-
-        @Test
         @DisplayName("Should throw exception for null raw signature")
         void shouldThrowExceptionForNullRawSignature() throws Exception {
             // Given
@@ -183,6 +177,19 @@ class PadesSignatureEmbedderTest {
 
             // When/Then
             assertThatThrownBy(() -> embedder.buildCmsSignature(rawSignature, createMockCertificateChain(), null))
+                .isInstanceOf(Exception.class);
+        }
+
+        @Test
+        @DisplayName("Should handle mock certificates with exception")
+        void shouldHandleMockCertificatesWithException() throws Exception {
+            // Given - mock certificates don't work with JcaCertStore
+            byte[] rawSignature = new byte[256];
+            X509Certificate[] certChain = createMockCertificateChain();
+            byte[] digest = new byte[32];
+
+            // When/Then - should throw exception due to invalid certificate encoding
+            assertThatThrownBy(() -> embedder.buildCmsSignature(rawSignature, certChain, digest))
                 .isInstanceOf(Exception.class);
         }
     }
@@ -286,6 +293,204 @@ class PadesSignatureEmbedderTest {
             cmsSig[i] = (byte) (i % 256);
         }
         return cmsSig;
+    }
+
+    @Nested
+    @DisplayName("PrecomputedContentSigner inner class")
+    class PrecomputedContentSignerTests {
+
+        @Test
+        @DisplayName("Should create signer with SHA256withRSA algorithm identifier")
+        void shouldCreateSignerWithAlgorithmIdentifier() {
+            // Given
+            byte[] signature = new byte[256];
+
+            // When - using reflection to access package-private constructor
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+
+            // Then - verify algorithm identifier is SHA256withRSA (1.2.840.113549.1.1.11)
+            assertThat(signer.getAlgorithmIdentifier()).isNotNull();
+            assertThat(signer.getAlgorithmIdentifier().getAlgorithm().getId())
+                .isEqualTo("1.2.840.113549.1.1.11");
+        }
+
+        @Test
+        @DisplayName("Should return pre-computed signature bytes")
+        void shouldReturnPrecomputedSignature() {
+            // Given
+            byte[] signature = new byte[]{1, 2, 3, 4, 5};
+
+            // When
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            byte[] result = signer.getSignature();
+
+            // Then
+            assertThat(result).isEqualTo(signature);
+        }
+
+        @Test
+        @DisplayName("Should return ByteArrayOutputStream for output")
+        void shouldReturnByteArrayOutputStream() {
+            // Given
+            byte[] signature = new byte[256];
+
+            // When
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            java.io.OutputStream outputStream = signer.getOutputStream();
+
+            // Then
+            assertThat(outputStream).isNotNull();
+            assertThat(outputStream).isInstanceOf(java.io.ByteArrayOutputStream.class);
+        }
+
+        @Test
+        @DisplayName("Should support writing to output stream")
+        void shouldSupportWritingToOutputStream() throws Exception {
+            // Given
+            byte[] signature = new byte[256];
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            java.io.OutputStream outputStream = signer.getOutputStream();
+
+            // When
+            outputStream.write(new byte[]{1, 2, 3});
+
+            // Then - should not throw, data goes to ByteArrayOutputStream
+            assertThat(outputStream.toString()).isNotEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("PadesSignedAttributesGenerator inner class")
+    class PadesSignedAttributesGeneratorTests {
+
+        @Test
+        @DisplayName("Should create generator with certificate and digest")
+        void shouldCreateGeneratorWithCertificateAndDigest() {
+            // Given
+            X509Certificate mockCert = mock(X509Certificate.class);
+            byte[] digest = new byte[32];
+
+            // When - using reflection to create instance
+            PadesSignedAttributesGenerator generator = createPadesSignedAttributesGenerator(mockCert, digest);
+
+            // Then - generator should be created successfully
+            assertThat(generator).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should return attributes with all required PAdES attributes")
+        void shouldReturnRequiredAttributes() throws Exception {
+            // Given - create a minimal real certificate for testing
+            // Note: This test is limited because mock certificates don't have proper ASN.1 encoding
+            // In a real scenario, you'd use test certificate resources
+            java.security.KeyPair keyPair = generateKeyPair();
+            X509Certificate cert = generateSelfSignedCertificate(keyPair);
+
+            byte[] digest = new byte[32];
+            PadesSignedAttributesGenerator generator = createPadesSignedAttributesGenerator(cert, digest);
+
+            // When
+            AttributeTable attributes = generator.getAttributes(Collections.emptyMap());
+
+            // Then - verify all required PAdES attributes are present
+            assertThat(attributes).isNotNull();
+
+            // Verify attributes are present using toHashtable() which returns the OIDs
+            Hashtable<?, ?> attrsHashtable = attributes.toHashtable();
+            assertThat(attrsHashtable).isNotEmpty();
+
+            // contentType attribute (1.2.840.113549.1.9.3)
+            assertThat(attrsHashtable.containsKey(PKCSObjectIdentifiers.pkcs_9_at_contentType)).isTrue();
+
+            // messageDigest attribute (1.2.840.113549.1.9.4)
+            assertThat(attrsHashtable.containsKey(PKCSObjectIdentifiers.pkcs_9_at_messageDigest)).isTrue();
+
+            // signingTime attribute (1.2.840.113549.1.9.5)
+            assertThat(attrsHashtable.containsKey(PKCSObjectIdentifiers.pkcs_9_at_signingTime)).isTrue();
+
+            // signingCertificateV2 attribute (1.2.840.113549.1.9.16.2.47)
+            assertThat(attrsHashtable.containsKey(PKCSObjectIdentifiers.id_aa_signingCertificateV2)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should throw exception for certificate encoding failure")
+        void shouldThrowExceptionForCertificateEncodingFailure() throws Exception {
+            // Given - certificate that throws on getEncoded()
+            X509Certificate mockCert = mock(X509Certificate.class);
+            when(mockCert.getEncoded()).thenThrow(new java.security.cert.CertificateEncodingException("Test error"));
+
+            byte[] digest = new byte[32];
+            PadesSignedAttributesGenerator generator = createPadesSignedAttributesGenerator(mockCert, digest);
+
+            // When/Then - should wrap exception in RuntimeException
+            assertThatThrownBy(() -> generator.getAttributes(Collections.emptyMap()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to build PAdES signed attributes");
+        }
+    }
+
+    // Helper methods for inner class testing
+
+    /**
+     * Creates a PrecomputedContentSigner instance via reflection.
+     */
+    private PrecomputedContentSigner createPrecomputedContentSigner(byte[] signature) {
+        try {
+            java.lang.reflect.Constructor<PrecomputedContentSigner> constructor =
+                PrecomputedContentSigner.class.getDeclaredConstructor(byte[].class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(signature);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create PrecomputedContentSigner", e);
+        }
+    }
+
+    /**
+     * Creates a PadesSignedAttributesGenerator instance via reflection.
+     */
+    private PadesSignedAttributesGenerator createPadesSignedAttributesGenerator(
+            X509Certificate certificate, byte[] digest) {
+        try {
+            java.lang.reflect.Constructor<PadesSignedAttributesGenerator> constructor =
+                PadesSignedAttributesGenerator.class.getDeclaredConstructor(X509Certificate.class, byte[].class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(certificate, digest);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create PadesSignedAttributesGenerator", e);
+        }
+    }
+
+    /**
+     * Generates a test KeyPair for certificate generation.
+     */
+    private java.security.KeyPair generateKeyPair() throws Exception {
+        java.security.KeyPairGenerator keyGen = java.security.KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(2048);
+        return keyGen.generateKeyPair();
+    }
+
+    /**
+     * Generates a minimal self-signed certificate for testing.
+     */
+    private X509Certificate generateSelfSignedCertificate(java.security.KeyPair keyPair) throws Exception {
+        // Create a minimal certificate using BouncyCastle
+        org.bouncycastle.x509.X509V3CertificateGenerator certGen =
+            new org.bouncycastle.x509.X509V3CertificateGenerator();
+
+        certGen.setSerialNumber(java.math.BigInteger.valueOf(1));
+        certGen.setIssuerDN(new javax.security.auth.x500.X500Principal("CN=Test"));
+        certGen.setSubjectDN(new javax.security.auth.x500.X500Principal("CN=Test"));
+        certGen.setNotBefore(new Date(System.currentTimeMillis() - 86400000L));
+        certGen.setNotAfter(new Date(System.currentTimeMillis() + 86400000L));
+        certGen.setPublicKey(keyPair.getPublic());
+        certGen.setSignatureAlgorithm("SHA256WithRSAEncryption");
+
+        // Register BouncyCastle provider if not already registered
+        if (java.security.Security.getProvider("BC") == null) {
+            java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        }
+
+        return certGen.generate(keyPair.getPrivate());
     }
 
     /**

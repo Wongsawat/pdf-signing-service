@@ -12,7 +12,10 @@ import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for CertificateValidator.
@@ -155,6 +158,179 @@ class CertificateValidatorTest {
             assertThatThrownBy(() -> validator.validateChain(certChain))
                 .isInstanceOf(CertificateValidator.CertificateValidationException.class)
                 .hasMessageContaining("expired");
+        }
+
+        @Test
+        @DisplayName("Should warn when certificate expires soon (less than 7 days)")
+        void shouldWarnWhenCertificateExpiresSoon() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate expiring in 3 days (less than default 7 days)
+            long now = System.currentTimeMillis();
+            X509Certificate shortLivedCert = createMockCertificate(
+                new Date(now - 86400000),             // valid from yesterday
+                new Date(now + 86400000 * 3)          // expires in 3 days
+            );
+
+            // Set up other required mocks
+            try {
+                lenient().when(shortLivedCert.getEncoded()).thenReturn(new byte[100]);
+                lenient().doNothing().when(shortLivedCert).verify(any(PublicKey.class));
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            X509Certificate[] certChain = new X509Certificate[]{shortLivedCert};
+
+            // When/Then - should not throw, just log warning
+            validator.validateChain(certChain);
+            // Test passes if no exception is thrown
+        }
+
+        @Test
+        @DisplayName("Should handle certificate without digitalSignature key usage")
+        void shouldHandleCertificateWithoutDigitalSignatureKeyUsage() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate without digitalSignature bit set
+            long now = System.currentTimeMillis();
+            X509Certificate cert = mock(X509Certificate.class);
+            lenient().when(cert.getNotBefore()).thenReturn(new Date(now - 86400000));
+            lenient().when(cert.getNotAfter()).thenReturn(new Date(now + 86400000 * 365)); // 1 year from now
+            lenient().when(cert.getKeyUsage()).thenReturn(new boolean[]{false, true}); // no digitalSignature
+
+            try {
+                lenient().when(cert.getEncoded()).thenReturn(new byte[100]);
+                lenient().doNothing().when(cert).verify(any(PublicKey.class));
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should not throw, just log warning
+            validator.validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should handle certificate without nonRepudiation key usage")
+        void shouldHandleCertificateWithoutNonRepudiationKeyUsage() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate without nonRepudiation bit set
+            long now = System.currentTimeMillis();
+            X509Certificate cert = mock(X509Certificate.class);
+            lenient().when(cert.getNotBefore()).thenReturn(new Date(now - 86400000));
+            lenient().when(cert.getNotAfter()).thenReturn(new Date(now + 86400000 * 365)); // 1 year from now
+            lenient().when(cert.getKeyUsage()).thenReturn(new boolean[]{true, false}); // no nonRepudiation
+
+            try {
+                lenient().when(cert.getEncoded()).thenReturn(new byte[100]);
+                lenient().doNothing().when(cert).verify(any(PublicKey.class));
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should not throw, just log warning
+            validator.validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should handle certificate with null extended key usage")
+        void shouldHandleNullExtendedKeyUsage() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate with null extended key usage
+            long now = System.currentTimeMillis();
+            X509Certificate cert = mock(X509Certificate.class);
+            lenient().when(cert.getNotBefore()).thenReturn(new Date(now - 86400000));
+            lenient().when(cert.getNotAfter()).thenReturn(new Date(now + 86400000 * 365)); // 1 year from now
+            lenient().when(cert.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            lenient().when(cert.getExtendedKeyUsage()).thenReturn(null);
+
+            try {
+                lenient().when(cert.getEncoded()).thenReturn(new byte[100]);
+                lenient().doNothing().when(cert).verify(any(PublicKey.class));
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should not throw
+            validator.validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should handle certificate without PDF signing EKU")
+        void shouldHandleCertificateWithoutPdfSigningEku() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate without PDF signing extended key usage
+            long now = System.currentTimeMillis();
+            X509Certificate cert = mock(X509Certificate.class);
+            lenient().when(cert.getNotBefore()).thenReturn(new Date(now - 86400000));
+            lenient().when(cert.getNotAfter()).thenReturn(new Date(now + 86400000 * 365)); // 1 year from now
+            lenient().when(cert.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            lenient().when(cert.getExtendedKeyUsage()).thenReturn(java.util.Collections.singletonList("1.2.840.113549.1.1.1")); // Some other EKU
+
+            try {
+                lenient().when(cert.getEncoded()).thenReturn(new byte[100]);
+                lenient().doNothing().when(cert).verify(any(PublicKey.class));
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should not throw
+            validator.validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should handle exception when checking extended key usage")
+        void shouldHandleExtendedKeyUsageException() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate that throws exception on getExtendedKeyUsage()
+            long now = System.currentTimeMillis();
+            X509Certificate cert = mock(X509Certificate.class);
+            lenient().when(cert.getNotBefore()).thenReturn(new Date(now - 86400000));
+            lenient().when(cert.getNotAfter()).thenReturn(new Date(now + 86400000 * 365)); // 1 year from now
+            lenient().when(cert.getKeyUsage()).thenReturn(new boolean[]{true, true});
+            lenient().when(cert.getExtendedKeyUsage()).thenThrow(new RuntimeException("EKU check failed"));
+
+            try {
+                lenient().when(cert.getEncoded()).thenReturn(new byte[100]);
+                lenient().doNothing().when(cert).verify(any(PublicKey.class));
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should not throw, just log debug message
+            validator.validateChain(certChain);
+        }
+
+        @Test
+        @DisplayName("Should handle generic exception during validation")
+        void shouldHandleGenericExceptionDuringValidation() throws Exception {
+            ReflectionTestUtils.setField(validator, "validationEnabled", true);
+
+            // Given - certificate that throws unexpected exception during validation
+            long now = System.currentTimeMillis();
+            X509Certificate cert = mock(X509Certificate.class);
+            lenient().when(cert.getNotBefore()).thenThrow(new RuntimeException("Unexpected error"));
+
+            X509Certificate[] certChain = new X509Certificate[]{cert};
+
+            // When/Then - should wrap in CertificateValidationException
+            assertThatThrownBy(() -> validator.validateChain(certChain))
+                .isInstanceOf(CertificateValidator.CertificateValidationException.class)
+                .hasMessageContaining("Certificate chain validation failed");
         }
     }
 
