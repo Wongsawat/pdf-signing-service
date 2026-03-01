@@ -3,8 +3,9 @@ package com.wpanther.pdfsigning.infrastructure.adapter.secondary.storage;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
 import com.wpanther.pdfsigning.domain.port.DocumentStoragePort;
+import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -22,24 +23,18 @@ import java.time.LocalDateTime;
  */
 @Component
 @ConditionalOnProperty(name = "app.storage.provider", havingValue = "local", matchIfMissing = true)
+@RequiredArgsConstructor
 @Slf4j
 public class LocalStorageAdapter implements DocumentStoragePort {
 
-    private final String basePath;
-    private final String baseUrl;
-
-    public LocalStorageAdapter(
-        @Value("${app.storage.local.base-path}") String basePath,
-        @Value("${app.storage.local.base-url}") String baseUrl
-    ) {
-        this.basePath = basePath;
-        this.baseUrl = baseUrl;
-        log.info("Initialized local document storage adapter: basePath={}, baseUrl={}", basePath, baseUrl);
-    }
+    private final StorageProperties storageProperties;
 
     @Override
     public String store(byte[] documentData, String documentType, SignedPdfDocument document) {
         try {
+            String basePath = storageProperties.getLocal().getBasePath();
+            String baseUrl = storageProperties.getLocal().getBaseUrl();
+
             LocalDateTime now = LocalDateTime.now();
             String year = String.format("%04d", now.getYear());
             String month = String.format("%02d", now.getMonthValue());
@@ -70,6 +65,9 @@ public class LocalStorageAdapter implements DocumentStoragePort {
     @Override
     public byte[] retrieve(String storageUrl) {
         try {
+            String basePath = storageProperties.getLocal().getBasePath();
+            String baseUrl = storageProperties.getLocal().getBaseUrl();
+
             // Convert URL back to filesystem path
             String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
             String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
@@ -94,6 +92,9 @@ public class LocalStorageAdapter implements DocumentStoragePort {
     @Override
     public void delete(String storageUrl) {
         try {
+            String basePath = storageProperties.getLocal().getBasePath();
+            String baseUrl = storageProperties.getLocal().getBaseUrl();
+
             // Convert URL back to filesystem path
             if (!storageUrl.startsWith(baseUrl)) {
                 // Assume storageUrl is already a filesystem path

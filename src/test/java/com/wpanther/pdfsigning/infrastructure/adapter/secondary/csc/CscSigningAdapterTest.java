@@ -7,6 +7,7 @@ import com.wpanther.pdfsigning.infrastructure.client.csc.SadTokenValidator;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureRequest;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureResponse;
+import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
 import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
@@ -54,6 +55,9 @@ class CscSigningAdapterTest {
     @Mock
     private SadTokenValidator mockSadTokenValidator;
 
+    @Mock
+    private CscProperties mockCscProperties;
+
     private CscSigningAdapter adapter;
 
     @BeforeEach
@@ -64,24 +68,13 @@ class CscSigningAdapterTest {
             mockSignatureEmbedder,
             mockCertificateParser,
             mockCertificateValidator,
-            mockSadTokenValidator
+            mockSadTokenValidator,
+            mockCscProperties
         );
-        // Use reflection to set the private fields for testing
-        try {
-            var clientIdField = CscSigningAdapter.class.getDeclaredField("clientId");
-            clientIdField.setAccessible(true);
-            clientIdField.set(adapter, "test-client");
-
-            var credentialIdField = CscSigningAdapter.class.getDeclaredField("credentialId");
-            credentialIdField.setAccessible(true);
-            credentialIdField.set(adapter, "test-credential");
-
-            var hashAlgoField = CscSigningAdapter.class.getDeclaredField("hashAlgo");
-            hashAlgoField.setAccessible(true);
-            hashAlgoField.set(adapter, "SHA256");
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to set up test fields", e);
-        }
+        // Set up mock properties defaults
+        lenient().when(mockCscProperties.getClientId()).thenReturn("test-client");
+        lenient().when(mockCscProperties.getCredentialId()).thenReturn("test-credential");
+        lenient().when(mockCscProperties.getHashAlgo()).thenReturn("SHA256");
     }
 
     @Nested

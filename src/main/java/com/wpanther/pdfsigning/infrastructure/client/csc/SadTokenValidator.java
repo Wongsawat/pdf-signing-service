@@ -1,8 +1,8 @@
 package com.wpanther.pdfsigning.infrastructure.client.csc;
 
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
+import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -17,11 +17,25 @@ import java.time.temporal.ChronoUnit;
 @Slf4j
 public class SadTokenValidator {
 
-    @Value("${app.csc.sad.min-expiry-seconds:60}")
-    private long minExpirySeconds = 60;
+    private final CscProperties cscProperties;
 
-    @Value("${app.csc.sad.max-expiry-seconds:3600}")
-    private long maxExpirySeconds = 3600;
+    // Default values for testing
+    private static final long DEFAULT_MIN_EXPIRY_SECONDS = 60;
+    private static final long DEFAULT_MAX_EXPIRY_SECONDS = 3600;
+
+    /**
+     * Main constructor with dependency injection.
+     */
+    public SadTokenValidator(CscProperties cscProperties) {
+        this.cscProperties = cscProperties;
+    }
+
+    /**
+     * Default constructor for testing.
+     */
+    public SadTokenValidator() {
+        this.cscProperties = null;
+    }
 
     /**
      * Validates a SAD token response from the CSC API.
@@ -51,21 +65,28 @@ public class SadTokenValidator {
         // 3. Validate expiration if present
         Long expiresIn = response.getExpiresIn();
         if (expiresIn != null) {
+            long minExpiry = cscProperties != null
+                ? cscProperties.getSadToken().getMinExpirySeconds()
+                : DEFAULT_MIN_EXPIRY_SECONDS;
+            long maxExpiry = cscProperties != null
+                ? cscProperties.getSadToken().getMaxExpirySeconds()
+                : DEFAULT_MAX_EXPIRY_SECONDS;
+
             if (expiresIn <= 0) {
                 throw new SadTokenValidationException(
                     "SAD token has already expired (expiresIn: " + expiresIn + ")"
                 );
             }
 
-            if (expiresIn < minExpirySeconds) {
+            if (expiresIn < minExpiry) {
                 throw new SadTokenValidationException(
-                    "SAD token expires too soon: " + expiresIn + " seconds (minimum: " + minExpirySeconds + ")"
+                    "SAD token expires too soon: " + expiresIn + " seconds (minimum: " + minExpiry + ")"
                 );
             }
 
-            if (expiresIn > maxExpirySeconds) {
+            if (expiresIn > maxExpiry) {
                 log.warn("SAD token expiration exceeds maximum: {} seconds (max: {})",
-                    expiresIn, maxExpirySeconds);
+                    expiresIn, maxExpiry);
             }
         }
 
@@ -92,14 +113,18 @@ public class SadTokenValidator {
      * Gets the minimum allowed expiry time in seconds.
      */
     public long getMinExpirySeconds() {
-        return minExpirySeconds;
+        return cscProperties != null
+            ? cscProperties.getSadToken().getMinExpirySeconds()
+            : DEFAULT_MIN_EXPIRY_SECONDS;
     }
 
     /**
      * Gets the maximum allowed expiry time in seconds.
      */
     public long getMaxExpirySeconds() {
-        return maxExpirySeconds;
+        return cscProperties != null
+            ? cscProperties.getSadToken().getMaxExpirySeconds()
+            : DEFAULT_MAX_EXPIRY_SECONDS;
     }
 
     /**

@@ -3,11 +3,11 @@ package com.wpanther.pdfsigning.infrastructure.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.pdfsigning.domain.event.PdfSigningReplyEvent;
+import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +24,11 @@ import java.util.Map;
 @Slf4j
 public class SagaReplyPublisher {
 
-    private static final String REPLY_TOPIC = "saga.reply.pdf-signing";
     private static final String AGGREGATE_TYPE = "SignedPdfDocument";
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
-
-    @Value("${app.kafka.topics.saga-reply:saga.reply.pdf-signing}")
-    private String sagaReplyTopic;
+    private final KafkaProperties kafkaProperties;
 
     /**
      * Publish SUCCESS reply when PDF signing completes successfully.
@@ -64,7 +61,7 @@ public class SagaReplyPublisher {
             reply,
             AGGREGATE_TYPE,
             sagaId,
-            sagaReplyTopic,
+            kafkaProperties.getTopics().getSagaReply(),
             sagaId,
             toJson(headers)
         );
@@ -91,7 +88,7 @@ public class SagaReplyPublisher {
             reply,
             AGGREGATE_TYPE,
             sagaId,
-            sagaReplyTopic,
+            kafkaProperties.getTopics().getSagaReply(),
             sagaId,
             toJson(headers)
         );
@@ -119,7 +116,7 @@ public class SagaReplyPublisher {
             reply,
             AGGREGATE_TYPE,
             sagaId,
-            sagaReplyTopic,
+            kafkaProperties.getTopics().getSagaReply(),
             sagaId,
             toJson(headers)
         );

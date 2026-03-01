@@ -1,7 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.pdf;
 
+import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.cert.X509Certificate;
@@ -10,7 +10,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Date;
 
 /**
- * Validates X.509 certificates from CSC API responses.
+ * Validates X509 certificates from CSC API responses.
  *
  * Security critical: Ensures certificates are valid and not expired before using them
  * for signature construction.
@@ -23,14 +23,33 @@ import java.util.Date;
 @Slf4j
 public class CertificateValidator {
 
-    @Value("${app.csc.cert.validation.enabled:true}")
-    private boolean validationEnabled;
+    private final CscProperties cscProperties;
 
-    @Value("${app.csc.cert.max-validity-days:365}")
-    private long maxValidityDays = 365;
+    // Test-only field
+    private boolean testValidationEnabled = false;
 
-    @Value("${app.csc.cert.min-validity-remaining-days:7}")
-    private long minValidityRemainingDays = 7;
+    /**
+     * Main constructor with dependency injection.
+     */
+    public CertificateValidator(CscProperties cscProperties) {
+        this.cscProperties = cscProperties;
+    }
+
+    /**
+     * Default constructor for testing.
+     */
+    public CertificateValidator() {
+        this.cscProperties = null;  // Will use testValidationEnabled
+    }
+
+    /**
+     * Sets whether certificate validation is enabled.
+     * Package-private for testing purposes only.
+     */
+    void setValidationEnabled(boolean enabled) {
+        this.testValidationEnabled = enabled;
+        log.info("Certificate validation {}", enabled ? "enabled" : "disabled");
+    }
 
     /**
      * Validates a certificate chain from the CSC API.
@@ -45,6 +64,11 @@ public class CertificateValidator {
      * @throws CertificateValidationException if validation fails
      */
     public void validateChain(X509Certificate[] certChain) {
+        // Check if validation is enabled (use properties or test mode)
+        boolean validationEnabled = cscProperties != null
+            ? cscProperties.getCertValidation().isEnabled()
+            : testValidationEnabled;
+
         if (!validationEnabled) {
             log.warn("Certificate validation is disabled - skipping chain validation");
             return;
@@ -77,6 +101,14 @@ public class CertificateValidator {
      * Validates the end-entity certificate.
      */
     private void validateEndEntityCertificate(X509Certificate cert) {
+        // Get validation settings from properties or use defaults for testing
+        int minValidityDays = cscProperties != null
+            ? cscProperties.getCertValidation().getMinValidityRemainingDays()
+            : 7;
+        int maxValidity = cscProperties != null
+            ? cscProperties.getCertValidation().getMaxValidityDays()
+            : 365;
+
         Instant now = Instant.now();
         Date notBefore = cert.getNotBefore();
         Date notAfter = cert.getNotAfter();
@@ -98,9 +130,9 @@ public class CertificateValidator {
         Instant expiryTime = notAfter.toInstant();
         long daysRemaining = ChronoUnit.DAYS.between(now, expiryTime);
 
-        if (daysRemaining < minValidityRemainingDays) {
+        if (daysRemaining < minValidityDays) {
             log.warn("Certificate expires soon: {} days remaining (minimum: {})",
-                daysRemaining, minValidityRemainingDays);
+                daysRemaining, minValidityDays);
         }
 
         // 3. Check maximum validity period (from issuance)
@@ -109,9 +141,9 @@ public class CertificateValidator {
             notAfter.toInstant()
         );
 
-        if (certValidityDays > maxValidityDays) {
+        if (certValidityDays > maxValidity) {
             log.warn("Certificate validity period exceeds maximum: {} days (max: {})",
-                certValidityDays, maxValidityDays);
+                certValidityDays, maxValidity);
         }
 
         // 4. Check key usage for digital signatures
@@ -169,14 +201,6 @@ public class CertificateValidator {
                 );
             }
         }
-    }
-
-    /**
-     * Sets whether certificate validation is enabled.
-     */
-    public void setValidationEnabled(boolean enabled) {
-        this.validationEnabled = enabled;
-        log.info("Certificate validation {}", enabled ? "enabled" : "disabled");
     }
 
     /**

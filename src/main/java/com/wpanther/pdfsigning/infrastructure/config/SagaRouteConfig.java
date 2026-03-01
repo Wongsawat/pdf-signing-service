@@ -3,10 +3,11 @@ package com.wpanther.pdfsigning.infrastructure.config;
 import com.wpanther.pdfsigning.application.service.SagaCommandHandler;
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
+import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,29 +23,19 @@ import org.springframework.stereotype.Component;
  * - notification.events (via outbox + Debezium CDC to notification-service)
  */
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class SagaRouteConfig extends RouteBuilder {
 
     private final SagaCommandHandler sagaCommandHandler;
-
-    @Value("${app.kafka.bootstrap-servers}")
-    private String kafkaBrokers;
-
-    @Value("${app.kafka.topics.saga-command:saga.command.pdf-signing}")
-    private String sagaCommandTopic;
-
-    @Value("${app.kafka.topics.saga-compensation:saga.compensation.pdf-signing}")
-    private String sagaCompensationTopic;
-
-    @Value("${app.kafka.topics.dlq:pdf.signing.dlq}")
-    private String dlqTopic;
-
-    public SagaRouteConfig(SagaCommandHandler sagaCommandHandler) {
-        this.sagaCommandHandler = sagaCommandHandler;
-    }
+    private final KafkaProperties kafkaProperties;
 
     @Override
     public void configure() throws Exception {
+        String kafkaBrokers = kafkaProperties.getBootstrapServers();
+        String sagaCommandTopic = kafkaProperties.getTopics().getSagaCommand();
+        String sagaCompensationTopic = kafkaProperties.getTopics().getSagaCompensation();
+        String dlqTopic = kafkaProperties.getTopics().getDlq();
 
         // Global error handler - Dead Letter Channel with retries
         errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=" + kafkaBrokers)

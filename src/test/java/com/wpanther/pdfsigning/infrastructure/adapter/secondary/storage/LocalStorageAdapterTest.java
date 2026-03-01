@@ -2,6 +2,7 @@ package com.wpanther.pdfsigning.infrastructure.adapter.secondary.storage;
 
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;
+import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,10 +33,12 @@ class LocalStorageAdapterTest {
 
     @BeforeEach
     void setUp() {
-        adapter = new LocalStorageAdapter(
-            tempDir.toString(),
-            "http://localhost:8080"
-        );
+        StorageProperties storageProperties = new StorageProperties();
+        storageProperties.setProvider("local");
+        storageProperties.getLocal().setBasePath(tempDir.toString());
+        storageProperties.getLocal().setBaseUrl("http://localhost:8080");
+
+        adapter = new LocalStorageAdapter(storageProperties);
     }
 
     @Nested
@@ -101,10 +104,12 @@ class LocalStorageAdapterTest {
         @DisplayName("Should throw exception when storage fails")
         void shouldThrowExceptionWhenStorageFails() {
             // Given - create adapter with invalid basePath that will fail
-            LocalStorageAdapter failingAdapter = new LocalStorageAdapter(
-                "/nonexistent/path/that/does/not/exist/and/cannot/be/created/1234567890",
-                "http://localhost:8080"
-            );
+            StorageProperties failingStorageProperties = new StorageProperties();
+            failingStorageProperties.setProvider("local");
+            failingStorageProperties.getLocal().setBasePath("/nonexistent/path/that/does/not/exist/and/cannot/be/created/1234567890");
+            failingStorageProperties.getLocal().setBaseUrl("http://localhost:8080");
+
+            LocalStorageAdapter failingAdapter = new LocalStorageAdapter(failingStorageProperties);
 
             byte[] documentData = "test pdf".getBytes();
             SignedPdfDocument document = createTestDocument();

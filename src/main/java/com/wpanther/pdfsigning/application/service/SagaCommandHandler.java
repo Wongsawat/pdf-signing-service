@@ -6,9 +6,10 @@ import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
+import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,25 +32,14 @@ import java.util.Optional;
  * </p>
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class SagaCommandHandler implements SagaCommandPort {
 
     private final SignedPdfDocumentRepository documentRepository;
     private final DomainPdfSigningService domainPdfSigningService;
     private final PdfSigningEventPublisher eventPublisher;
-
-    // Explicit constructor for Spring dependency injection
-    public SagaCommandHandler(
-            SignedPdfDocumentRepository documentRepository,
-            DomainPdfSigningService domainPdfSigningService,
-            PdfSigningEventPublisher eventPublisher) {
-        this.documentRepository = documentRepository;
-        this.domainPdfSigningService = domainPdfSigningService;
-        this.eventPublisher = eventPublisher;
-    }
-
-    @Value("${app.signing.max-retries:3}")
-    private int maxRetries;
+    private final SigningProperties signingProperties;
 
     /**
      * Handles ProcessPdfSigningCommand from saga orchestrator (SagaCommandPort implementation).
@@ -90,7 +80,7 @@ public class SagaCommandHandler implements SagaCommandPort {
             }
 
             // 3. Check retry limits
-            if (existing.isPresent() && existing.get().getRetryCount() >= maxRetries) {
+            if (existing.isPresent() && existing.get().getRetryCount() >= signingProperties.getMaxRetries()) {
                 log.warn("Max retries exceeded for documentId={}, sending FAILURE reply", command.getDocumentId());
                 eventPublisher.publishFailure(
                     command.getSagaId(),

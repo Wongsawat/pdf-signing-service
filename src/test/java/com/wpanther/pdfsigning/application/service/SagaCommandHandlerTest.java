@@ -7,8 +7,10 @@ import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
+import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
 import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import com.wpanther.saga.domain.enums.SagaStep;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,8 +42,17 @@ class SagaCommandHandlerTest {
     @Mock
     private PdfSigningEventPublisher eventPublisher;
 
+    @Mock
+    private SigningProperties signingProperties;
+
     @InjectMocks
     private SagaCommandHandler sagaCommandHandler;
+
+    @BeforeEach
+    void setUp() {
+        // Set up default mock behavior for SigningProperties
+        lenient().when(signingProperties.getMaxRetries()).thenReturn(3);
+    }
 
     @Test
     @DisplayName("Should process signing command successfully")

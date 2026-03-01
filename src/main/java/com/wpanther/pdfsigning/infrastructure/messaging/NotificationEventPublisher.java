@@ -4,10 +4,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.pdfsigning.domain.event.PdfSignedNotificationEvent;
 import com.wpanther.pdfsigning.domain.event.PdfSigningFailedNotificationEvent;
+import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,9 +27,7 @@ public class NotificationEventPublisher {
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
-
-    @Value("${app.kafka.topics.notification-events:notification.events}")
-    private String notificationEventsTopic;
+    private final KafkaProperties kafkaProperties;
 
     /**
      * Publish notification event when PDF is signed successfully.
@@ -65,7 +63,7 @@ public class NotificationEventPublisher {
             notification,
             "SignedPdfDocument",
             signedDocumentId,
-            notificationEventsTopic,
+            kafkaProperties.getTopics().getNotificationEvents(),
             invoiceId,  // Partition by invoiceId for ordering
             toJson(headers)
         );
@@ -102,7 +100,7 @@ public class NotificationEventPublisher {
                 notification,
                 "SignedPdfDocument",
                 invoiceId,
-                notificationEventsTopic,
+                kafkaProperties.getTopics().getNotificationEvents(),
                 invoiceId,
                 toJson(headers)
             );

@@ -3,8 +3,9 @@ package com.wpanther.pdfsigning.infrastructure.adapter.secondary.storage;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
 import com.wpanther.pdfsigning.domain.port.DocumentStoragePort;
+import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -29,66 +30,72 @@ import java.time.LocalDate;
  */
 @Component
 @ConditionalOnProperty(name = "app.storage.provider", havingValue = "s3")
+@RequiredArgsConstructor
 @Slf4j
 public class S3StorageAdapter implements DocumentStoragePort {
 
-    private final S3Client s3Client;
-    private final String bucketName;
-    private final String baseUrl;
+    private final StorageProperties storageProperties;
+    private S3Client s3Client;
+    private String baseUrl;
 
     /**
-     * Constructor for Spring dependency injection with configuration values.
+     * Initializes the S3 client and base URL from configuration.
+     * Called by Spring after properties are injected.
      */
-    public S3StorageAdapter(
-        @Value("${app.storage.s3.bucket-name}") String bucketName,
-        @Value("${app.storage.s3.region}") String region,
-        @Value("${app.storage.s3.access-key}") String accessKey,
-        @Value("${app.storage.s3.secret-key}") String secretKey,
-        @Value("${app.storage.s3.endpoint:}") String endpoint,
-        @Value("${app.storage.s3.path-style-access:false}") boolean pathStyleAccess,
-        @Value("${app.storage.s3.base-url:}") String baseUrl
-    ) {
-        this.bucketName = bucketName;
-        this.baseUrl = baseUrl != null && !baseUrl.isEmpty() ? baseUrl : "https://s3." + region + ".amazonaws.com/" + bucketName + "/";
+    public void init() {
+        StorageProperties.S3 s3 = storageProperties.getS3();
+        this.baseUrl = s3.getBaseUrl() != null && !s3.getBaseUrl().isEmpty()
+            ? s3.getBaseUrl()
+            : "https://s3." + s3.getRegion() + ".amazonaws.com/" + s3.getBucketName() + "/";
 
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(
+            s3.getAccessKey(),
+            s3.getSecretKey()
+        );
+
         var s3Builder = S3Client.builder()
-            .region(Region.of(region))
+            .region(Region.of(s3.getRegion()))
             .credentialsProvider(StaticCredentialsProvider.create(credentials));
 
-        if (endpoint != null && !endpoint.isEmpty()) {
-            s3Builder.endpointOverride(URI.create(endpoint));
-            log.info("Using custom S3 endpoint: {}", endpoint);
+        if (s3.getEndpoint() != null && !s3.getEndpoint().isEmpty()) {
+            s3Builder.endpointOverride(URI.create(s3.getEndpoint()));
+            log.info("Using custom S3 endpoint: {}", s3.getEndpoint());
         }
 
-        if (pathStyleAccess) {
+        if (s3.isPathStyleAccess()) {
             s3Builder.forcePathStyle(true);
             log.info("Using path-style access for S3");
         }
 
         this.s3Client = s3Builder.build();
 
-        log.info("Initialized S3 document storage adapter: bucket={}, region={}", bucketName, region);
+        log.info("Initialized S3 document storage adapter: bucket={}, region={}",
+            s3.getBucketName(), s3.getRegion());
     }
 
     /**
      * Constructor for testing with injected S3Client.
      * Package-private for test access only.
      */
-    S3StorageAdapter(S3Client s3Client, String bucketName, String baseUrl) {
+    S3StorageAdapter(StorageProperties storageProperties, S3Client s3Client, String baseUrl) {
+        this.storageProperties = storageProperties;
         this.s3Client = s3Client;
-        this.bucketName = bucketName;
         this.baseUrl = baseUrl;
     }
 
     @Override
     public String store(byte[] documentData, String documentType, SignedPdfDocument document) {
+        if (s3Client == null) {
+            init();
+        }
+
         try {
+            StorageProperties.S3 s3 = storageProperties.getS3();
             String documentId = document != null ? document.getId().getValue().toString() : "unknown";
             String key = generateKey(documentType, documentId);
 
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
+                .bucket(s3.getBucketName())
                 .key(key)
                 .contentType("application/pdf")
                 .contentLength((long) documentData.length)
@@ -99,7 +106,7 @@ public class S3StorageAdapter implements DocumentStoragePort {
             // Generate simple URL (not presigned)
             String url = baseUrl + key;
             log.info("Stored document in S3: type={}, bucket={}, key={}, size={} bytes",
-                documentType, bucketName, key, documentData.length);
+                documentType, s3.getBucketName(), key, documentData.length);
 
             return url;
 
@@ -111,12 +118,17 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     @Override
     public byte[] retrieve(String storageUrl) {
+        if (s3Client == null) {
+            init();
+        }
+
         try {
+            StorageProperties.S3 s3 = storageProperties.getS3();
             // Extract key from pre-signed URL or use directly if it's just a key
             String key = extractKeyFromUrl(storageUrl);
 
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(bucketName)
+                .bucket(s3.getBucketName())
                 .key(key)
                 .build();
 
@@ -135,16 +147,21 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     @Override
     public void delete(String storageUrl) {
+        if (s3Client == null) {
+            init();
+        }
+
         try {
+            StorageProperties.S3 s3 = storageProperties.getS3();
             String key = extractKeyFromUrl(storageUrl);
 
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
-                .bucket(bucketName)
+                .bucket(s3.getBucketName())
                 .key(key)
                 .build();
 
             s3Client.deleteObject(deleteObjectRequest);
-            log.info("Deleted document from S3: bucket={}, key={}", bucketName, key);
+            log.info("Deleted document from S3: bucket={}, key={}", s3.getBucketName(), key);
 
         } catch (Exception e) {
             log.error("Failed to delete document from S3", e);
@@ -169,6 +186,7 @@ public class S3StorageAdapter implements DocumentStoragePort {
      */
     private String extractKeyFromUrl(String storageUrl) {
         try {
+            String bucketName = storageProperties.getS3().getBucketName();
             if (storageUrl.contains("?")) {
                 // Pre-signed URL - extract key from URL path
                 String pathPart = storageUrl.substring(0, storageUrl.indexOf("?"));

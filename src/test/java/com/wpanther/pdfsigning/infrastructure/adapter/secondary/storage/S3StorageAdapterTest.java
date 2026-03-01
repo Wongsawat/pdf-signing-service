@@ -1,6 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.secondary.storage;
 
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
+import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -37,11 +38,13 @@ class S3StorageAdapterTest {
 
     @BeforeEach
     void setUp() {
-        adapter = new S3StorageAdapter(
-            mockS3Client,
-            "etax-signed-pdfs",
-            "http://localhost:9000/etax-signed-pdfs/"
-        );
+        // Create test StorageProperties
+        StorageProperties storageProperties = new StorageProperties();
+        storageProperties.setProvider("s3");
+        storageProperties.getS3().setBucketName("etax-signed-pdfs");
+        storageProperties.getS3().setBaseUrl("http://localhost:9000/etax-signed-pdfs/");
+
+        adapter = new S3StorageAdapter(storageProperties, mockS3Client, "http://localhost:9000/etax-signed-pdfs/");
     }
 
     @Nested
@@ -304,36 +307,40 @@ class S3StorageAdapterTest {
     class SpringConstructorTests {
 
         @Test
-        @DisplayName("Should create adapter with Spring constructor parameters")
-        void shouldCreateWithSpringConstructor() {
-            // When - using the main Spring constructor with all parameters
-            S3StorageAdapter springAdapter = new S3StorageAdapter(
-                "test-bucket",
-                "us-east-1",
-                "test-access-key",
-                "test-secret-key",
-                "",  // empty endpoint
-                false,  // no path style access
-                ""  // empty baseUrl - should use default
-            );
+        @DisplayName("Should create adapter with StorageProperties")
+        void shouldCreateWithStorageProperties() {
+            // When - using the main Spring constructor with StorageProperties
+            StorageProperties storageProperties = new StorageProperties();
+            storageProperties.setProvider("s3");
+            storageProperties.getS3().setBucketName("test-bucket");
+            storageProperties.getS3().setRegion("us-east-1");
+            storageProperties.getS3().setAccessKey("test-access-key");
+            storageProperties.getS3().setSecretKey("test-secret-key");
+            storageProperties.getS3().setEndpoint("");
+            storageProperties.getS3().setPathStyleAccess(false);
+            storageProperties.getS3().setBaseUrl("");
+
+            S3StorageAdapter springAdapter = new S3StorageAdapter(storageProperties);
 
             // Then - adapter should be created successfully
             assertThat(springAdapter).isNotNull();
         }
 
         @Test
-        @DisplayName("Should create adapter with custom endpoint")
+        @DisplayName("Should create adapter with custom endpoint via StorageProperties")
         void shouldCreateWithCustomEndpoint() {
-            // When - using custom endpoint (e.g., MinIO)
-            S3StorageAdapter adapterWithEndpoint = new S3StorageAdapter(
-                "test-bucket",
-                "us-east-1",
-                "minioadmin",
-                "minioadmin",
-                "http://localhost:9000",  // custom endpoint
-                true,  // path style access for MinIO
-                "http://localhost:9000/test-bucket/"
-            );
+            // When - using custom endpoint (e.g., MinIO) via StorageProperties
+            StorageProperties storageProperties = new StorageProperties();
+            storageProperties.setProvider("s3");
+            storageProperties.getS3().setBucketName("test-bucket");
+            storageProperties.getS3().setRegion("us-east-1");
+            storageProperties.getS3().setAccessKey("minioadmin");
+            storageProperties.getS3().setSecretKey("minioadmin");
+            storageProperties.getS3().setEndpoint("http://localhost:9000");
+            storageProperties.getS3().setPathStyleAccess(true);
+            storageProperties.getS3().setBaseUrl("http://localhost:9000/test-bucket/");
+
+            S3StorageAdapter adapterWithEndpoint = new S3StorageAdapter(storageProperties);
 
             // Then
             assertThat(adapterWithEndpoint).isNotNull();

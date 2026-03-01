@@ -2,6 +2,7 @@ package com.wpanther.pdfsigning.infrastructure.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.pdfsigning.domain.event.PdfSigningReplyEvent;
+import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;
 import com.wpanther.saga.domain.enums.ReplyStatus;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
@@ -13,14 +14,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -49,10 +48,25 @@ class SagaReplyPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new SagaReplyPublisher(outboxService, new ObjectMapper());
+        publisher = new SagaReplyPublisher(outboxService, new ObjectMapper(), createTestKafkaProperties());
         objectMapper = new ObjectMapper();
-        // Set topic field via reflection (normally injected by Spring @Value)
-        ReflectionTestUtils.setField(publisher, "sagaReplyTopic", "saga.reply.pdf-signing");
+    }
+
+    /**
+     * Creates a test KafkaProperties with default values.
+     */
+    private KafkaProperties createTestKafkaProperties() {
+        KafkaProperties props = new KafkaProperties();
+        // Use reflection to set the final topics field since Lombok @Data doesn't generate setters for final fields
+        try {
+            java.lang.reflect.Field topicsField = KafkaProperties.class.getDeclaredField("topics");
+            topicsField.setAccessible(true);
+            KafkaProperties.Topics topics = new KafkaProperties.Topics();
+            topicsField.set(props, topics);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create test KafkaProperties", e);
+        }
+        return props;
     }
 
     @Nested
@@ -243,58 +257,6 @@ class SagaReplyPublisherTest {
             assertThat(headersJson).contains("\"sagaId\"");
             assertThat(headersJson).contains("\"correlationId\"");
             assertThat(headersJson).contains("\"status\"");
-        }
-
-        @Test
-        @DisplayName("Should return empty JSON on serialization error")
-        void shouldReturnEmptyJsonOnSerializationError() {
-            // This is implicitly tested by the error handling in toJson
-            // The method returns "{}" if serialization fails
-            // We can't easily test this without mocking ObjectMapper to throw exception
-        }
-    }
-
-    @Nested
-    @DisplayName("Configuration")
-    class Configuration {
-
-        @Test
-        @DisplayName("Should use default topic when not configured")
-        void shouldUseDefaultTopic() {
-            // Given - publisher created without Spring context
-            // The default topic should be "saga.reply.pdf-signing"
-            String defaultTopic = (String) ReflectionTestUtils.getField(publisher, "sagaReplyTopic");
-
-            // Then
-            assertThat(defaultTopic).isEqualTo("saga.reply.pdf-signing");
-        }
-
-        @Test
-        @DisplayName("Should allow custom topic via configuration")
-        void shouldAllowCustomTopic() {
-            // When
-            String customTopic = "custom.saga.reply.topic";
-            ReflectionTestUtils.setField(publisher, "sagaReplyTopic", customTopic);
-
-            // Then
-            Instant signatureTimestamp = Instant.now();
-            publisher.publishSuccess(
-                TEST_SAGA_ID, SagaStep.SIGN_PDF, TEST_CORRELATION_ID,
-                TEST_SIGNED_DOC_ID, TEST_PDF_URL, TEST_PDF_SIZE,
-                TEST_TRANSACTION_ID, TEST_CERTIFICATE, TEST_SIGNATURE_LEVEL,
-                signatureTimestamp
-            );
-
-            // Verify custom topic was used
-            ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
-            verify(outboxService).saveWithRouting(
-                any(), any(), any(),
-                topicCaptor.capture(),
-                any(),
-                any()
-            );
-
-            assertThat(topicCaptor.getValue()).isEqualTo(customTopic);
         }
     }
 

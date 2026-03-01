@@ -10,12 +10,12 @@ import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeRequest
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureRequest;
 import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureResponse;
+import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
 import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.cert.X509Certificate;
@@ -45,15 +45,7 @@ public class CscSigningAdapter implements SigningPort {
     private final CertificateParser certificateParser;
     private final CertificateValidator certificateValidator;
     private final SadTokenValidator sadTokenValidator;
-
-    @Value("${app.csc.client-id:#{null}}")
-    private String clientId;
-
-    @Value("${app.csc.credential-id}")
-    private String credentialId;
-
-    @Value("${app.csc.hash-algo:SHA256}")
-    private String hashAlgo;
+    private final CscProperties cscProperties;
 
     @Override
     public byte[] signPdf(byte[] pdfBytes, byte[] digest, X509Certificate[] certChain) {
@@ -73,25 +65,25 @@ public class CscSigningAdapter implements SigningPort {
             String base64urlDigest = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
             CSCAuthorizeResponse authResponse = authClient.authorize(
                 CSCAuthorizeRequest.builder()
-                    .clientId(clientId)
-                    .credentialID(credentialId)
+                    .clientId(cscProperties.getClientId())
+                    .credentialID(cscProperties.getCredentialId())
                     .numSignatures("1")
-                    .hashAlgo(hashAlgo)
+                    .hashAlgo(cscProperties.getHashAlgo())
                     .hash(new String[]{base64urlDigest})
                     .build()
             );
 
             // Step 2: Validate SAD token (security critical)
-            sadTokenValidator.validate(authResponse, credentialId);
+            sadTokenValidator.validate(authResponse, cscProperties.getCredentialId());
             log.debug("SAD token validated successfully");
 
             // Step 3: Sign the hash via CSC API
             log.debug("Signing hash via CSC API");
             CSCSignatureRequest signRequest = CSCSignatureRequest.builder()
-                .clientId(clientId)
-                .credentialID(credentialId)
+                .clientId(cscProperties.getClientId())
+                .credentialID(cscProperties.getCredentialId())
                 .SAD(authResponse.getSAD())
-                .hashAlgo(hashAlgo)
+                .hashAlgo(cscProperties.getHashAlgo())
                 .signatureData(CSCSignatureRequest.SignatureData.builder()
                     .hashToSign(new String[]{base64urlDigest})
                     .build())
