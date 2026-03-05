@@ -4,15 +4,17 @@ import com.wpanther.pdfsigning.domain.port.in.SagaCommandPort;
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.*;
+import com.wpanther.pdfsigning.domain.port.out.PdfSignedEventPort;
+import com.wpanther.pdfsigning.domain.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
 import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
-import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -38,7 +40,8 @@ public class SagaCommandHandler implements SagaCommandPort {
 
     private final SignedPdfDocumentRepository documentRepository;
     private final DomainPdfSigningService domainPdfSigningService;
-    private final PdfSigningEventPublisher eventPublisher;
+    private final PdfSagaReplyPort sagaReplyPort;
+    private final PdfSignedEventPort pdfSignedEventPort;
     private final SigningProperties signingProperties;
 
     /**
@@ -82,14 +85,19 @@ public class SagaCommandHandler implements SagaCommandPort {
             // 3. Check retry limits
             if (existing.isPresent() && existing.get().getRetryCount() >= signingProperties.getMaxRetries()) {
                 log.warn("Max retries exceeded for documentId={}, sending FAILURE reply", command.getDocumentId());
-                eventPublisher.publishFailure(
+                sagaReplyPort.publishFailure(
                     command.getSagaId(),
                     command.getSagaStep(),
                     command.getCorrelationId(),
+                    "Maximum retry attempts exceeded for PDF signing"
+                );
+                pdfSignedEventPort.publishPdfSigningFailureNotification(
+                    command.getSagaId(),
                     command.getDocumentId(),
                     command.getInvoiceNumber(),
                     command.getDocumentType(),
-                    "Maximum retry attempts exceeded for PDF signing"
+                    "Maximum retry attempts exceeded for PDF signing",
+                    command.getCorrelationId()
                 );
                 return;
             }
@@ -130,13 +138,10 @@ public class SagaCommandHandler implements SagaCommandPort {
             documentRepository.save(document);
 
             // 8. Send SUCCESS reply AND notification event (dual publishing)
-            eventPublisher.publishSuccess(
+            sagaReplyPort.publishSuccess(
                 command.getSagaId(),
                 command.getSagaStep(),
                 command.getCorrelationId(),
-                command.getDocumentId(),           // invoiceId
-                command.getInvoiceNumber(),
-                command.getDocumentType(),
                 document.getId().toString(),
                 result.signedPdfUrl(),
                 result.signedPdfSize(),
@@ -144,6 +149,18 @@ public class SagaCommandHandler implements SagaCommandPort {
                 result.certificate(),
                 result.signatureLevel(),
                 result.signatureTimestamp()
+            );
+            pdfSignedEventPort.publishPdfSignedNotification(
+                command.getSagaId(),
+                command.getDocumentId(),
+                command.getInvoiceNumber(),
+                command.getDocumentType(),
+                document.getId().toString(),
+                result.signedPdfUrl(),
+                result.signedPdfSize(),
+                result.signatureLevel(),
+                result.signatureTimestamp(),
+                command.getCorrelationId()
             );
 
             log.info("PDF signing completed successfully for documentId={}, sagaId={}",
@@ -162,14 +179,19 @@ public class SagaCommandHandler implements SagaCommandPort {
             });
 
             // Send FAILURE reply AND notification event
-            eventPublisher.publishFailure(
+            sagaReplyPort.publishFailure(
                 command.getSagaId(),
                 command.getSagaStep(),
                 command.getCorrelationId(),
+                e.getMessage()
+            );
+            pdfSignedEventPort.publishPdfSigningFailureNotification(
+                command.getSagaId(),
                 command.getDocumentId(),
                 command.getInvoiceNumber(),
                 command.getDocumentType(),
-                e.getMessage()
+                e.getMessage(),
+                command.getCorrelationId()
             );
         }
     }
@@ -204,7 +226,7 @@ public class SagaCommandHandler implements SagaCommandPort {
 
             // 3. Send COMPENSATED reply (idempotent)
             // Note: No notification event for compensation - orchestrator handles that
-            eventPublisher.publishCompensated(
+            sagaReplyPort.publishCompensated(
                 command.getSagaId(),
                 command.getSagaStep(),
                 command.getCorrelationId()
@@ -218,13 +240,10 @@ public class SagaCommandHandler implements SagaCommandPort {
                 command.getSagaId(), command.getDocumentId(), e);
 
             // Send FAILURE reply if compensation fails
-            eventPublisher.publishFailure(
+            sagaReplyPort.publishFailure(
                 command.getSagaId(),
                 command.getSagaStep(),
                 command.getCorrelationId(),
-                command.getDocumentId(),
-                "",
-                command.getDocumentType(),
                 "Compensation failed: " + e.getMessage()
             );
         }
@@ -234,20 +253,31 @@ public class SagaCommandHandler implements SagaCommandPort {
      * Sends SUCCESS reply for an already completed document (idempotent).
      */
     private void sendSuccessReply(ProcessPdfSigningCommand command, SignedPdfDocument document) {
-        eventPublisher.publishSuccess(
+        Instant timestamp = document.getSignatureTimestamp()
+            .atZone(java.time.ZoneId.systemDefault()).toInstant();
+        sagaReplyPort.publishSuccess(
             command.getSagaId(),
             command.getSagaStep(),
             command.getCorrelationId(),
-            command.getDocumentId(),
-            command.getInvoiceNumber(),
-            command.getDocumentType(),
             document.getId().toString(),
             document.getSignedPdfUrl(),
             document.getSignedPdfSize(),
             document.getTransactionId(),
             document.getCertificate(),
             document.getSignatureLevel(),
-            document.getSignatureTimestamp().atZone(java.time.ZoneId.systemDefault()).toInstant()
+            timestamp
+        );
+        pdfSignedEventPort.publishPdfSignedNotification(
+            command.getSagaId(),
+            command.getDocumentId(),
+            command.getInvoiceNumber(),
+            command.getDocumentType(),
+            document.getId().toString(),
+            document.getSignedPdfUrl(),
+            document.getSignedPdfSize(),
+            document.getSignatureLevel(),
+            timestamp,
+            command.getCorrelationId()
         );
     }
 }

@@ -2,7 +2,7 @@ package com.wpanther.pdfsigning.infrastructure.adapter.primary.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wpanther.pdfsigning.application.port.SagaCommandPort;
+import com.wpanther.pdfsigning.domain.port.in.SagaCommandPort;
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.saga.domain.enums.SagaStep;

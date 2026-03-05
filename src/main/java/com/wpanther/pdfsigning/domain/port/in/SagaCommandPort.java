@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.application.port;
+package com.wpanther.pdfsigning.domain.port.in;
 
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;

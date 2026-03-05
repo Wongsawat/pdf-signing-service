@@ -5,10 +5,11 @@ import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;
+import com.wpanther.pdfsigning.domain.port.out.PdfSignedEventPort;
+import com.wpanther.pdfsigning.domain.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
 import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
-import com.wpanther.pdfsigning.infrastructure.messaging.PdfSigningEventPublisher;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,7 +41,10 @@ class SagaCommandHandlerTest {
     private DomainPdfSigningService domainPdfSigningService;
 
     @Mock
-    private PdfSigningEventPublisher eventPublisher;
+    private PdfSagaReplyPort sagaReplyPort;
+
+    @Mock
+    private PdfSignedEventPort pdfSignedEventPort;
 
     @Mock
     private SigningProperties signingProperties;
@@ -103,20 +107,19 @@ class SagaCommandHandlerTest {
             anyString(),
             eq(PadesLevel.BASELINE_B)
         );
-        verify(eventPublisher).publishSuccess(
+        verify(sagaReplyPort).publishSuccess(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
-            eq("doc-789"),
-            eq("INV-2024-001"),
-            eq("INVOICE"),
-            anyString(), // signedDocumentId
+            anyString(),
             eq("http://example.com/signed.pdf"),
-            eq(54321L),
-            eq("txn-abc"),
-            eq("PEM-CERT"),
-            eq("PAdES-BASELINE-B"),
-            any() // signatureTimestamp
+            eq(54321L), eq("txn-abc"), eq("PEM-CERT"), eq("PAdES-BASELINE-B"), any()
+        );
+        verify(pdfSignedEventPort).publishPdfSignedNotification(
+            eq("saga-123"), eq("doc-789"), eq("INV-2024-001"), eq("INVOICE"),
+            anyString(),
+            eq("http://example.com/signed.pdf"),
+            eq(54321L), eq("PAdES-BASELINE-B"), any(), eq("corr-456")
         );
     }
 
@@ -154,20 +157,19 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(domainPdfSigningService, never()).signPdf(any(), any(), any());
-        verify(eventPublisher).publishSuccess(
+        verify(sagaReplyPort).publishSuccess(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
-            eq("doc-789"),
-            eq("INV-2024-001"),
-            eq("INVOICE"),
-            anyString(), // signedDocumentId
+            anyString(),
             eq("http://example.com/signed.pdf"),
-            eq(54321L),
-            eq("txn-abc"),
-            eq("PEM-CERT"),
-            eq("PAdES-BASELINE-B"),
-            any() // signatureTimestamp
+            eq(54321L), eq("txn-abc"), eq("PEM-CERT"), eq("PAdES-BASELINE-B"), any()
+        );
+        verify(pdfSignedEventPort).publishPdfSignedNotification(
+            eq("saga-123"), eq("doc-789"), eq("INV-2024-001"), eq("INVOICE"),
+            anyString(),
+            eq("http://example.com/signed.pdf"),
+            eq(54321L), eq("PAdES-BASELINE-B"), any(), eq("corr-456")
         );
     }
 
@@ -204,7 +206,7 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(domainPdfSigningService).compensateSigning(eq(document.getId()), eq("http://example.com/signed.pdf"));
-        verify(eventPublisher).publishCompensated(
+        verify(sagaReplyPort).publishCompensated(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456")
@@ -227,7 +229,7 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(domainPdfSigningService, never()).compensateSigning(any(), any());
-        verify(eventPublisher).publishCompensated(
+        verify(sagaReplyPort).publishCompensated(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456")
@@ -266,20 +268,19 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessPdfSigning(command);
 
         // Then - should still work and publish success
-        verify(eventPublisher).publishSuccess(
+        verify(sagaReplyPort).publishSuccess(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
-            eq("doc-789"),
-            eq("INV-2024-001"),
-            eq("INVOICE"),
             anyString(),
             eq("http://example.com/signed.pdf"),
-            eq(54321L),
-            eq("txn-abc"),
-            eq("PEM-CERT"),
-            eq("PAdES-BASELINE-B"),
-            any()
+            eq(54321L), eq("txn-abc"), eq("PEM-CERT"), eq("PAdES-BASELINE-B"), any()
+        );
+        verify(pdfSignedEventPort).publishPdfSignedNotification(
+            eq("saga-123"), eq("doc-789"), eq("INV-2024-001"), eq("INVOICE"),
+            anyString(),
+            eq("http://example.com/signed.pdf"),
+            eq(54321L), eq("PAdES-BASELINE-B"), any(), eq("corr-456")
         );
     }
 
@@ -298,7 +299,7 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleCompensatePdfSigning(command);
 
         // Then - should still work and publish compensated
-        verify(eventPublisher).publishCompensated(
+        verify(sagaReplyPort).publishCompensated(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456")
@@ -334,14 +335,16 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then - should publish failure with max retries message
-        verify(eventPublisher).publishFailure(
+        verify(sagaReplyPort).publishFailure(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
-            eq("doc-789"),
-            eq("INV-2024-001"),
-            eq("INVOICE"),
             eq("Maximum retry attempts exceeded for PDF signing")
+        );
+        verify(pdfSignedEventPort).publishPdfSigningFailureNotification(
+            eq("saga-123"), eq("doc-789"), eq("INV-2024-001"), eq("INVOICE"),
+            eq("Maximum retry attempts exceeded for PDF signing"),
+            eq("corr-456")
         );
         verify(domainPdfSigningService, never()).signPdf(any(), any(), any());
     }
@@ -371,14 +374,16 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then - should mark document as failed and publish failure event
-        verify(eventPublisher).publishFailure(
+        verify(sagaReplyPort).publishFailure(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
-            eq("doc-789"),
-            eq("INV-2024-001"),
-            eq("INVOICE"),
             eq("Signing failed")
+        );
+        verify(pdfSignedEventPort).publishPdfSigningFailureNotification(
+            eq("saga-123"), eq("doc-789"), eq("INV-2024-001"), eq("INVOICE"),
+            eq("Signing failed"),
+            eq("corr-456")
         );
     }
 
@@ -414,14 +419,11 @@ class SagaCommandHandlerTest {
         // When
         sagaCommandHandler.handleCompensation(command);
 
-        // Then - should publish failure event
-        verify(eventPublisher).publishFailure(
+        // Then - should publish failure event (saga reply only - no notification for compensation failure)
+        verify(sagaReplyPort).publishFailure(
             eq("saga-123"),
             eq(SagaStep.SIGN_PDF),
             eq("corr-456"),
-            eq("doc-789"),
-            eq(""),
-            eq("INVOICE"),
             eq("Compensation failed: Compensation failed")
         );
     }
