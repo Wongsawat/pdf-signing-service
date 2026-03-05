@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.adapter.secondary.storage;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.storage;
 
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;

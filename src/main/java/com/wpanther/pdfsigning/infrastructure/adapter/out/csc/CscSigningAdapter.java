@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.adapter.secondary.csc;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.csc;
 
 import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SigningException;

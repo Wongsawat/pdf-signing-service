@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.adapter.secondary.pdf;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
 import com.wpanther.pdfsigning.domain.port.out.PdfGenerationPort;

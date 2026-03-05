@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.adapter.secondary.download;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.download;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
 import org.junit.jupiter.api.BeforeEach;
