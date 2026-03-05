@@ -71,38 +71,39 @@ public class SagaCommandHandler implements SagaCommandPort {
         log.info("Processing PDF signing command: sagaId={}, documentId={}, documentType={}",
             command.getSagaId(), command.getDocumentId(), command.getDocumentType());
 
+        // 1. Check idempotency - use documentId (from command)
+        Optional<SignedPdfDocument> existing = documentRepository.findByInvoiceId(command.getDocumentId());
+
+        // 2. Already completed — idempotent reply, then return
+        if (existing.isPresent() && existing.get().isCompleted()) {
+            log.info("PDF already signed for documentId={}, sending SUCCESS reply", command.getDocumentId());
+            sendSuccessReply(command, existing.get());
+            return;
+        }
+
+        // 3. Max retries exceeded — publish failure and return (OUTSIDE the signing try/catch)
+        if (existing.isPresent() && existing.get().getRetryCount() >= signingProperties.getMaxRetries()) {
+            log.warn("Max retries exceeded for documentId={}, sending FAILURE reply", command.getDocumentId());
+            sagaReplyPort.publishFailure(
+                command.getSagaId(),
+                command.getSagaStep(),
+                command.getCorrelationId(),
+                "Maximum retry attempts exceeded for PDF signing"
+            );
+            pdfSignedEventPort.publishPdfSigningFailureNotification(
+                command.getSagaId(),
+                command.getDocumentId(),
+                command.getInvoiceNumber(),
+                command.getDocumentType(),
+                "Maximum retry attempts exceeded for PDF signing",
+                command.getCorrelationId()
+            );
+            return;
+        }
+
+        // 4. Main signing logic — only signing exceptions go to catch block
         try {
-            // 1. Check idempotency - use documentId (from command)
-            Optional<SignedPdfDocument> existing = documentRepository.findByInvoiceId(command.getDocumentId());
-
-            // 2. Check if already completed (idempotent)
-            if (existing.isPresent() && existing.get().isCompleted()) {
-                log.info("PDF already signed for documentId={}, sending SUCCESS reply", command.getDocumentId());
-                sendSuccessReply(command, existing.get());
-                return;
-            }
-
-            // 3. Check retry limits
-            if (existing.isPresent() && existing.get().getRetryCount() >= signingProperties.getMaxRetries()) {
-                log.warn("Max retries exceeded for documentId={}, sending FAILURE reply", command.getDocumentId());
-                sagaReplyPort.publishFailure(
-                    command.getSagaId(),
-                    command.getSagaStep(),
-                    command.getCorrelationId(),
-                    "Maximum retry attempts exceeded for PDF signing"
-                );
-                pdfSignedEventPort.publishPdfSigningFailureNotification(
-                    command.getSagaId(),
-                    command.getDocumentId(),
-                    command.getInvoiceNumber(),
-                    command.getDocumentType(),
-                    "Maximum retry attempts exceeded for PDF signing",
-                    command.getCorrelationId()
-                );
-                return;
-            }
-
-            // 4. Create or retrieve aggregate
+            // 4a. Create or retrieve aggregate
             SignedPdfDocument document = existing.orElseGet(() ->
                 SignedPdfDocument.create(
                     command.getDocumentId(),
@@ -114,18 +115,18 @@ public class SagaCommandHandler implements SagaCommandPort {
                 )
             );
 
-            // 5. Start signing (state transition)
+            // 4b. Start signing (state transition)
             document.startSigning();
             documentRepository.save(document);
 
-            // 6. Execute signing via hexagonal domain service
+            // 4c. Execute signing via hexagonal domain service
             DomainPdfSigningService.SignedPdfResult result = domainPdfSigningService.signPdf(
                 command.getPdfUrl(),
                 document.getId().toString(),
                 PadesLevel.BASELINE_B  // Default PAdES level for Thai e-Tax compliance
             );
 
-            // 7. Mark completed (state transition)
+            // 4d. Mark completed (state transition)
             document.markCompleted(
                 result.signedPdfPath(),
                 result.signedPdfUrl(),
@@ -137,7 +138,7 @@ public class SagaCommandHandler implements SagaCommandPort {
             );
             documentRepository.save(document);
 
-            // 8. Send SUCCESS reply AND notification event (dual publishing)
+            // 4e. Send SUCCESS reply AND notification event (dual publishing)
             sagaReplyPort.publishSuccess(
                 command.getSagaId(),
                 command.getSagaStep(),
@@ -167,7 +168,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                 command.getDocumentId(), command.getSagaId());
 
         } catch (Exception e) {
-            // 9. Handle failure
+            // 5. Handle signing failure
             log.error("PDF signing failed for documentId={}, sagaId={}",
                 command.getDocumentId(), command.getSagaId(), e);
 
