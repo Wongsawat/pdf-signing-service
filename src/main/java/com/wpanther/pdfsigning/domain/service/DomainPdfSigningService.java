@@ -2,10 +2,10 @@ package com.wpanther.pdfsigning.domain.service;
 
 import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.domain.port.DocumentDownloadPort;
-import com.wpanther.pdfsigning.domain.port.DocumentStoragePort;
-import com.wpanther.pdfsigning.domain.port.PdfGenerationPort;
-import com.wpanther.pdfsigning.domain.port.SigningPort;
+import com.wpanther.pdfsigning.domain.port.out.DocumentDownloadPort;
+import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
+import com.wpanther.pdfsigning.domain.port.out.PdfGenerationPort;
+import com.wpanther.pdfsigning.domain.port.out.SigningPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

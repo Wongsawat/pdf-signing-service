@@ -2,7 +2,7 @@ package com.wpanther.pdfsigning.infrastructure.adapter.secondary.csc;
 
 import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.domain.port.SigningPort;
+import com.wpanther.pdfsigning.domain.port.out.SigningPort;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
 import com.wpanther.pdfsigning.infrastructure.client.csc.CSCAuthClient;
 import com.wpanther.pdfsigning.infrastructure.client.csc.SadTokenValidator;
