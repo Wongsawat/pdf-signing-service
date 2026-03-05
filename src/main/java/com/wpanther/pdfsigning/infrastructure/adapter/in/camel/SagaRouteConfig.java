@@ -1,6 +1,6 @@
-package com.wpanther.pdfsigning.infrastructure.config;
+package com.wpanther.pdfsigning.infrastructure.adapter.in.camel;
 
-import com.wpanther.pdfsigning.application.service.SagaCommandHandler;
+import com.wpanther.pdfsigning.domain.port.in.SagaCommandPort;
 import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class SagaRouteConfig extends RouteBuilder {
 
-    private final SagaCommandHandler sagaCommandHandler;
+    private final SagaCommandPort sagaCommandPort;
     private final KafkaProperties kafkaProperties;
 
     @Override
@@ -65,7 +65,7 @@ public class SagaRouteConfig extends RouteBuilder {
                                 ProcessPdfSigningCommand cmd = exchange.getIn().getBody(ProcessPdfSigningCommand.class);
                                 log.info("Processing saga command for saga: {}, invoice: {}",
                                                 cmd.getSagaId(), cmd.getInvoiceNumber());
-                                sagaCommandHandler.handleProcessCommand(cmd);
+                                sagaCommandPort.handleProcessPdfSigning(cmd);
                         })
                         .log("Successfully processed saga command for sagaId: ${body.sagaId}");
 
@@ -87,7 +87,7 @@ public class SagaRouteConfig extends RouteBuilder {
                                 CompensatePdfSigningCommand cmd = exchange.getIn().getBody(CompensatePdfSigningCommand.class);
                                 log.info("Processing compensation for saga: {}, document: {}",
                                                 cmd.getSagaId(), cmd.getDocumentId());
-                                sagaCommandHandler.handleCompensation(cmd);
+                                sagaCommandPort.handleCompensatePdfSigning(cmd);
                         })
                         .log("Successfully processed compensation command for sagaId: ${body.sagaId}");
     }
