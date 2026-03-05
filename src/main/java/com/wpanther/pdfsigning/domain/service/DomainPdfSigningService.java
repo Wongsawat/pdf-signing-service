@@ -1,7 +1,7 @@
 package com.wpanther.pdfsigning.domain.service;
 
 import com.wpanther.pdfsigning.domain.model.*;
-import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
+import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.port.out.DocumentDownloadPort;
 import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
 import com.wpanther.pdfsigning.domain.port.out.PdfGenerationPort;
