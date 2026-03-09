@@ -68,6 +68,8 @@ public class PadesSignatureEmbedder {
         // Create temp file for PDFBox 3.0 with auto-cleanup on JVM exit
         Path tempFile = null;
         PDDocument document = null;
+        IOException primaryException = null;
+
         try {
             // Read all bytes first to ensure we have the complete PDF
             byte[] pdfBytes = pdf.readAllBytes();
@@ -104,22 +106,38 @@ public class PadesSignatureEmbedder {
                 throw new IOException("Failed to compute PDF digest", e);
             }
 
+        } catch (IOException e) {
+            primaryException = e;
+            throw e;
         } finally {
-            // Close document to release file handles
+            // Cleanup in reverse order of acquisition: document first, then file
+            Exception cleanupException = null;
+
+            // Step 1: Close document to release file handles (if successfully loaded)
             if (document != null) {
                 try {
                     document.close();
                 } catch (Exception e) {
+                    cleanupException = e;
                     log.warn("Failed to close PDF document: {}", e.getMessage());
                 }
             }
-            // Delete temp file immediately (not just on exit)
+
+            // Step 2: Delete temp file immediately (even if document close failed)
             if (tempFile != null) {
                 try {
                     Files.deleteIfExists(tempFile);
                 } catch (IOException e) {
                     log.warn("Failed to delete temp file: {} (will be cleaned up on JVM exit)", tempFile);
+                    if (cleanupException == null) {
+                        cleanupException = e;
+                    }
                 }
+            }
+
+            // Step 3: Add cleanup exception as suppressed if we have a primary exception
+            if (primaryException != null && cleanupException != null) {
+                primaryException.addSuppressed(cleanupException);
             }
         }
     }
@@ -188,6 +206,8 @@ public class PadesSignatureEmbedder {
     public byte[] embedSignature(byte[] pdfBytes, byte[] cmsSignature) throws IOException {
         Path tempFile = null;
         PDDocument document = null;
+        IOException primaryException = null;
+
         try {
             // Create temp file with deleteOnExit option as safety net
             tempFile = Files.createTempFile("pdf-sign-", ".pdf");
@@ -217,22 +237,38 @@ public class PadesSignatureEmbedder {
 
             return output.toByteArray();
 
+        } catch (IOException e) {
+            primaryException = e;
+            throw e;
         } finally {
-            // Close document to release file handles
+            // Cleanup in reverse order of acquisition: document first, then file
+            Exception cleanupException = null;
+
+            // Step 1: Close document to release file handles (if successfully loaded)
             if (document != null) {
                 try {
                     document.close();
                 } catch (Exception e) {
+                    cleanupException = e;
                     log.warn("Failed to close PDF document: {}", e.getMessage());
                 }
             }
-            // Delete temp file immediately (not just on exit)
+
+            // Step 2: Delete temp file immediately (even if document close failed)
             if (tempFile != null) {
                 try {
                     Files.deleteIfExists(tempFile);
                 } catch (IOException e) {
                     log.warn("Failed to delete temp file: {} (will be cleaned up on JVM exit)", tempFile);
+                    if (cleanupException == null) {
+                        cleanupException = e;
+                    }
                 }
+            }
+
+            // Step 3: Add cleanup exception as suppressed if we have a primary exception
+            if (primaryException != null && cleanupException != null) {
+                primaryException.addSuppressed(cleanupException);
             }
         }
     }

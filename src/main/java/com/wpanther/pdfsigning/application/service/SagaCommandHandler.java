@@ -9,6 +9,7 @@ import com.wpanther.pdfsigning.domain.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
 import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
+import com.wpanther.pdfsigning.infrastructure.config.properties.PadesProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ public class SagaCommandHandler implements SagaCommandPort {
     private final PdfSagaReplyPort sagaReplyPort;
     private final PdfSignedEventPort pdfSignedEventPort;
     private final SigningProperties signingProperties;
+private final PadesProperties padesProperties;
 
     /**
      * Handles ProcessPdfSigningCommand from saga orchestrator (SagaCommandPort implementation).
@@ -123,7 +125,7 @@ public class SagaCommandHandler implements SagaCommandPort {
             DomainPdfSigningService.SignedPdfResult result = domainPdfSigningService.signPdf(
                 command.getPdfUrl(),
                 document.getId().toString(),
-                PadesLevel.BASELINE_B  // Default PAdES level for Thai e-Tax compliance
+                padesProperties.getLevel()  // Use configured PAdES level (default: BASELINE_B)
             );
 
             // 4d. Mark completed (state transition)

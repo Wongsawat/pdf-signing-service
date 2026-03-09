@@ -10,6 +10,7 @@ import com.wpanther.pdfsigning.domain.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
 import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
+import com.wpanther.pdfsigning.infrastructure.config.properties.PadesProperties;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +50,9 @@ class SagaCommandHandlerTest {
     @Mock
     private SigningProperties signingProperties;
 
+    @Mock
+    private PadesProperties padesProperties;
+
     @InjectMocks
     private SagaCommandHandler sagaCommandHandler;
 
@@ -56,6 +60,7 @@ class SagaCommandHandlerTest {
     void setUp() {
         // Set up default mock behavior for SigningProperties
         lenient().when(signingProperties.getMaxRetries()).thenReturn(3);
+lenient().when(padesProperties.getLevel()).thenReturn(PadesLevel.BASELINE_B);
     }
 
     @Test
