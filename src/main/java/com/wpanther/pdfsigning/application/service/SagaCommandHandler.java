@@ -44,7 +44,7 @@ public class SagaCommandHandler implements SagaCommandPort {
     private final PdfSagaReplyPort sagaReplyPort;
     private final PdfSignedEventPort pdfSignedEventPort;
     private final SigningProperties signingProperties;
-private final PadesProperties padesProperties;
+    private final PadesProperties padesProperties;
 
     /**
      * Handles ProcessPdfSigningCommand from saga orchestrator (SagaCommandPort implementation).

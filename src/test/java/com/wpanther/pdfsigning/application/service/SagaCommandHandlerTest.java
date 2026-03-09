@@ -60,7 +60,7 @@ class SagaCommandHandlerTest {
     void setUp() {
         // Set up default mock behavior for SigningProperties
         lenient().when(signingProperties.getMaxRetries()).thenReturn(3);
-lenient().when(padesProperties.getLevel()).thenReturn(PadesLevel.BASELINE_B);
+        lenient().when(padesProperties.getLevel()).thenReturn(PadesLevel.BASELINE_B);
     }
 
     @Test
