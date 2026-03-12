@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.config;
+package com.wpanther.pdfsigning.infrastructure.config.feign;
 
 import feign.Logger;
 import feign.Request;

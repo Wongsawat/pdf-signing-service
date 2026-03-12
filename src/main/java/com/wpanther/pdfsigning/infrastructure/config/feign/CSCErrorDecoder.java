@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.config;
+package com.wpanther.pdfsigning.infrastructure.config.feign;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
 import feign.Response;
