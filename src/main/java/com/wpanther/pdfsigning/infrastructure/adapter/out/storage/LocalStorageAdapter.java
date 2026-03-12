@@ -1,8 +1,9 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.storage;
 
+import com.wpanther.pdfsigning.domain.model.DocumentType;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
-import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
+import com.wpanther.pdfsigning.application.port.out.DocumentStoragePort;
 import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,7 @@ public class LocalStorageAdapter implements DocumentStoragePort {
     private final StorageProperties storageProperties;
 
     @Override
-    public String store(byte[] documentData, String documentType, SignedPdfDocument document) {
+    public String store(byte[] documentData, DocumentType documentType, SignedPdfDocument document) {
         try {
             String basePath = storageProperties.getLocal().getBasePath();
             String baseUrl = storageProperties.getLocal().getBaseUrl();
@@ -44,7 +45,7 @@ public class LocalStorageAdapter implements DocumentStoragePort {
             Files.createDirectories(directory);
 
             String documentId = document != null ? document.getId().getValue().toString() : "unknown";
-            String filename = String.format("%s-%s.pdf", documentType.toLowerCase(), documentId);
+            String filename = String.format("%s-%s.pdf", documentType.getValue().toLowerCase(), documentId);
             Path filePath = directory.resolve(filename);
 
             Files.write(filePath, documentData);

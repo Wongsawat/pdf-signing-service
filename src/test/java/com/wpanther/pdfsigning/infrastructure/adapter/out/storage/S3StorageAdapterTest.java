@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.storage;
 
+import com.wpanther.pdfsigning.domain.model.DocumentType;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,7 +60,7 @@ class S3StorageAdapterTest {
             SignedPdfDocument document = createTestDocument();
 
             // When
-            String storageUrl = adapter.store(documentData, "SIGNED_PDF", document);
+            String storageUrl = adapter.store(documentData, DocumentType.SIGNED_PDF, document);
 
             // Then
             assertThat(storageUrl).isNotNull();
@@ -78,7 +79,7 @@ class S3StorageAdapterTest {
             SignedPdfDocument document = createTestDocument();
 
             // When
-            String storageUrl = adapter.store(documentData, "SIGNED_PDF", document);
+            String storageUrl = adapter.store(documentData, DocumentType.SIGNED_PDF, document);
 
             // Then - should have document-type/YYYY/MM/DD structure
             String key = storageUrl.substring("http://localhost:9000/etax-signed-pdfs/".length());
@@ -97,7 +98,7 @@ class S3StorageAdapterTest {
             byte[] documentData = "test pdf".getBytes();
 
             // When
-            String storageUrl = adapter.store(documentData, "SIGNED_PDF", null);
+            String storageUrl = adapter.store(documentData, DocumentType.SIGNED_PDF, null);
 
             // Then
             assertThat(storageUrl).contains("unknown.pdf");
@@ -113,7 +114,7 @@ class S3StorageAdapterTest {
                 .when(mockS3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
 
             // When/Then
-            assertThatThrownBy(() -> adapter.store(documentData, "SIGNED_PDF", document))
+            assertThatThrownBy(() -> adapter.store(documentData, DocumentType.SIGNED_PDF, document))
                 .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
                 .hasMessageContaining("Failed to store document");
         }
@@ -280,7 +281,7 @@ class S3StorageAdapterTest {
             SignedPdfDocument document = createTestDocument();
 
             // When
-            String storageUrl = adapter.store(documentData, "TAX_INVOICE", document);
+            String storageUrl = adapter.store(documentData, DocumentType.TAX_INVOICE, document);
 
             // Then - underscores should be replaced with hyphens
             assertThat(storageUrl).contains("tax-invoice/");
@@ -295,7 +296,7 @@ class S3StorageAdapterTest {
             SignedPdfDocument document = createTestDocument();
 
             // When
-            String storageUrl = adapter.store(documentData, "INVOICE", document);
+            String storageUrl = adapter.store(documentData, DocumentType.INVOICE, document);
 
             // Then
             assertThat(storageUrl).contains("invoice/");

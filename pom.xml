@@ -373,15 +373,27 @@
                                         <!-- Exclude main application class and root package -->
                                         <exclude>com.wpanther.pdfsigning.PdfSigningServiceApplication</exclude>
                                         <exclude>com.wpanther.pdfsigning</exclude>
-                                        <!-- Exclude DTO classes with Lombok builders -->
-                                        <exclude>com.wpanther.pdfsigning.infrastructure.client.csc.dto</exclude>
-                                        <exclude>com.wpanther.pdfsigning.infrastructure.client.csc.dto.*</exclude>
-                                        <!-- Exclude storage adapter (file I/O, hard to unit test) -->
-                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.secondary.download</exclude>
-                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.secondary.download.*</exclude>
-                                        <!-- Exclude storage provider interface -->
-                                        <exclude>com.wpanther.pdfsigning.infrastructure.storage</exclude>
-                                        <exclude>com.wpanther.pdfsigning.infrastructure.storage.*</exclude>
+                                        <!-- Exclude CSC DTOs (data transfer objects, low business logic) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.*</exclude>
+                                        <!-- Exclude download adapter (file I/O, hard to unit test) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.download</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.download.*</exclude>
+                                        <!-- Exclude storage adapters (file I/O, hard to unit test) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.storage</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.storage.*</exclude>
+                                        <!-- Exclude Camel routes (integration tested separately) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.in.camel</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.in.camel.*</exclude>
+                                        <!-- Exclude PDF utilities (heavy PDFBox/BouncyCastle, tested via integration) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.pdf</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.*</exclude>
+                                        <!-- Exclude CSC client (SadTokenValidator tested separately) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.*</exclude>
+                                        <!-- Exclude messaging adapters (integration tested via Camel) -->
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.messaging</exclude>
+                                        <exclude>com.wpanther.pdfsigning.infrastructure.adapter.out.messaging.*</exclude>
                                     </excludes>
                                 </rule>
                             </rules>

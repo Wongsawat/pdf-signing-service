@@ -2,18 +2,18 @@ package com.wpanther.pdfsigning.infrastructure.adapter.out.csc;
 
 import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.domain.port.out.SigningPort;
-import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
-import com.wpanther.pdfsigning.infrastructure.client.csc.CSCAuthClient;
-import com.wpanther.pdfsigning.infrastructure.client.csc.SadTokenValidator;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeRequest;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureRequest;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureResponse;
+import com.wpanther.pdfsigning.application.port.out.SigningPort;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.CSCApiClient;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.CSCAuthClient;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.SadTokenValidator;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCAuthorizeRequest;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCAuthorizeResponse;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureRequest;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureResponse;
 import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
-import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
-import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
-import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateParser;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateValidator;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesSignatureEmbedder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -46,14 +46,6 @@ public class CscSigningAdapter implements SigningPort {
     private final CertificateValidator certificateValidator;
     private final SadTokenValidator sadTokenValidator;
     private final CscProperties cscProperties;
-
-    @Override
-    public byte[] signPdf(byte[] pdfBytes, byte[] digest, X509Certificate[] certChain) {
-        log.debug("Starting CSC signing process (deprecated method)");
-        // Call new method with default BASELINE_B level
-        SigningResult result = signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B);
-        return result.signedPdf();
-    }
 
     @Override
     public SigningResult signPdfWithCertChain(byte[] pdfBytes, byte[] digest, PadesLevel padesLevel) {

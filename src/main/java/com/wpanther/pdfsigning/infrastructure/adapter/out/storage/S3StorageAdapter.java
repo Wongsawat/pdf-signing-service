@@ -1,8 +1,9 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.storage;
 
+import com.wpanther.pdfsigning.domain.model.DocumentType;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
-import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
+import com.wpanther.pdfsigning.application.port.out.DocumentStoragePort;
 import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,7 +85,7 @@ public class S3StorageAdapter implements DocumentStoragePort {
     }
 
     @Override
-    public String store(byte[] documentData, String documentType, SignedPdfDocument document) {
+    public String store(byte[] documentData, DocumentType documentType, SignedPdfDocument document) {
         if (s3Client == null) {
             init();
         }
@@ -172,9 +173,9 @@ public class S3StorageAdapter implements DocumentStoragePort {
     /**
      * Generate S3 key: {documentType}/YYYY/MM/DD/{documentType}-{documentId}.pdf
      */
-    private String generateKey(String documentType, String documentId) {
+    private String generateKey(DocumentType documentType, String documentId) {
         LocalDate now = LocalDate.now();
-        String sanitizedType = documentType.toLowerCase().replace("_", "-");
+        String sanitizedType = documentType.getValue().toLowerCase().replace("_", "-");
         return String.format("%s/%04d/%02d/%02d/%s-%s.pdf",
             sanitizedType, now.getYear(), now.getMonthValue(), now.getDayOfMonth(), sanitizedType, documentId);
     }

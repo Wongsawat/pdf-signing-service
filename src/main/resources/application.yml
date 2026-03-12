@@ -139,7 +139,7 @@ app:
 saga:
   outbox:
     cleanup:
-      enabled: ${OUTBOX_CLEANUP_ENABLED:false}
+      enabled: ${OUTBOX_CLEANUP_ENABLED:true}
       cron-expression: "0 0 2 * * ?"
       retention-hours: 24
     publisher:
