@@ -11,9 +11,9 @@ import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCAuthorizeRe
 import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureRequest;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureResponse;
 import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
-import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
-import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
-import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateParser;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateValidator;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesSignatureEmbedder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

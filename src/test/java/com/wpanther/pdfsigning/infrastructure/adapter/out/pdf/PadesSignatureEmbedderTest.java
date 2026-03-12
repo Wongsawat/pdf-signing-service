@@ -1,32 +1,25 @@
-package com.wpanther.pdfsigning.infrastructure.pdf;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.util.Collections;
+import java.security.KeyPair;
 import java.security.cert.X509Certificate;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Hashtable;
-import java.util.Map;
 
-import org.bouncycastle.asn1.ASN1Encodable;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
-import org.bouncycastle.cms.CMSAttributeTableGenerator;
+import org.bouncycastle.asn1.cms.AttributeTable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -383,7 +376,7 @@ class PadesSignatureEmbedderTest {
             // Given - create a minimal real certificate for testing
             // Note: This test is limited because mock certificates don't have proper ASN.1 encoding
             // In a real scenario, you'd use test certificate resources
-            java.security.KeyPair keyPair = generateKeyPair();
+            KeyPair keyPair = generateKeyPair();
             X509Certificate cert = generateSelfSignedCertificate(keyPair);
 
             byte[] digest = new byte[32];
@@ -463,7 +456,7 @@ class PadesSignatureEmbedderTest {
     /**
      * Generates a test KeyPair for certificate generation.
      */
-    private java.security.KeyPair generateKeyPair() throws Exception {
+    private KeyPair generateKeyPair() throws Exception {
         java.security.KeyPairGenerator keyGen = java.security.KeyPairGenerator.getInstance("RSA");
         keyGen.initialize(2048);
         return keyGen.generateKeyPair();
@@ -472,7 +465,7 @@ class PadesSignatureEmbedderTest {
     /**
      * Generates a minimal self-signed certificate for testing.
      */
-    private X509Certificate generateSelfSignedCertificate(java.security.KeyPair keyPair) throws Exception {
+    private X509Certificate generateSelfSignedCertificate(KeyPair keyPair) throws Exception {
         // Create a minimal certificate using BouncyCastle
         org.bouncycastle.x509.X509V3CertificateGenerator certGen =
             new org.bouncycastle.x509.X509V3CertificateGenerator();

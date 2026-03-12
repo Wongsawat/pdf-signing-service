@@ -1,7 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesSignatureEmbedder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

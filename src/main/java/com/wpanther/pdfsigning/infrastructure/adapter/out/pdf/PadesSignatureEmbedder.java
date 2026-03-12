@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.pdf;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.pdf;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.cert.X509CertificateHolder;
