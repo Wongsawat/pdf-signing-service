@@ -1,7 +1,7 @@
 package com.wpanther.pdfsigning.application.service;
 
-import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
-import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
+import com.wpanther.pdfsigning.application.dto.event.CompensatePdfSigningCommand;
+import com.wpanther.pdfsigning.application.dto.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;

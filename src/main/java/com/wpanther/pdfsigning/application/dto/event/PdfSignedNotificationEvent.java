@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.domain.event;
+package com.wpanther.pdfsigning.application.dto.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

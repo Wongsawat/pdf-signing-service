@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.domain.event;
+package com.wpanther.pdfsigning.application.dto.event;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
 import com.wpanther.saga.domain.enums.SagaStep;

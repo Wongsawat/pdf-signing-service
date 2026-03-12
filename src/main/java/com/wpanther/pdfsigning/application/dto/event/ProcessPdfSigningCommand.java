@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.domain.event;
+package com.wpanther.pdfsigning.application.dto.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -10,33 +10,41 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Saga command to compensate (rollback) PDF signing.
- * Consumed from: saga.compensation.pdf-signing
+ * Saga command from orchestrator to sign a PDF document.
+ * Consumed from: saga.command.pdf-signing
  *
- * Sent by the orchestrator when the saga fails and previous steps need to be compensated.
- * Compensation involves deleting the signed PDF and associated records.
+ * Contains all information needed to download and sign the PDF.
  * Extends SagaCommand which provides sagaId, sagaStep, and correlationId.
  */
 @Getter
-public class CompensatePdfSigningCommand extends SagaCommand {
+public class ProcessPdfSigningCommand extends SagaCommand {
 
     private static final long serialVersionUID = 1L;
 
     @JsonProperty("documentId")
     private final String documentId;
 
+    @JsonProperty("invoiceNumber")
+    private final String invoiceNumber;
+
     @JsonProperty("documentType")
     private final String documentType;
 
-    @JsonProperty("stepToCompensate")
-    private final String stepToCompensate;
+    @JsonProperty("pdfUrl")
+    private final String pdfUrl;
+
+    @JsonProperty("pdfSize")
+    private final Long pdfSize;
+
+    @JsonProperty("xmlEmbedded")
+    private final Boolean xmlEmbedded;
 
     /**
      * Constructor for deserialization from Kafka.
      * Used by Apache Camel JSON unmarshalling.
      */
     @JsonCreator
-    public CompensatePdfSigningCommand(
+    public ProcessPdfSigningCommand(
         @JsonProperty("eventId") UUID eventId,
         @JsonProperty("occurredAt") Instant occurredAt,
         @JsonProperty("eventType") String eventType,
@@ -45,23 +53,33 @@ public class CompensatePdfSigningCommand extends SagaCommand {
         @JsonProperty("sagaStep") SagaStep sagaStep,
         @JsonProperty("correlationId") String correlationId,
         @JsonProperty("documentId") String documentId,
+        @JsonProperty("invoiceNumber") String invoiceNumber,
         @JsonProperty("documentType") String documentType,
-        @JsonProperty("stepToCompensate") String stepToCompensate
+        @JsonProperty("pdfUrl") String pdfUrl,
+        @JsonProperty("pdfSize") Long pdfSize,
+        @JsonProperty("xmlEmbedded") Boolean xmlEmbedded
     ) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
+        this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
-        this.stepToCompensate = stepToCompensate;
+        this.pdfUrl = pdfUrl;
+        this.pdfSize = pdfSize;
+        this.xmlEmbedded = xmlEmbedded;
     }
 
     /**
      * Convenience constructor for testing.
      */
-    public CompensatePdfSigningCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                       String documentId, String documentType, String stepToCompensate) {
+    public ProcessPdfSigningCommand(String sagaId, SagaStep sagaStep, String correlationId,
+                                    String documentId, String invoiceNumber, String documentType,
+                                    String pdfUrl, Long pdfSize, Boolean xmlEmbedded) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
+        this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
-        this.stepToCompensate = stepToCompensate;
+        this.pdfUrl = pdfUrl;
+        this.pdfSize = pdfSize;
+        this.xmlEmbedded = xmlEmbedded;
     }
 }

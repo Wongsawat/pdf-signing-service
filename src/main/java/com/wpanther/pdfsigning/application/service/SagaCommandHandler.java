@@ -1,8 +1,8 @@
 package com.wpanther.pdfsigning.application.service;
 
 import com.wpanther.pdfsigning.domain.port.in.SagaCommandPort;
-import com.wpanther.pdfsigning.domain.event.CompensatePdfSigningCommand;
-import com.wpanther.pdfsigning.domain.event.ProcessPdfSigningCommand;
+import com.wpanther.pdfsigning.application.dto.event.CompensatePdfSigningCommand;
+import com.wpanther.pdfsigning.application.dto.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.port.out.PdfSignedEventPort;
 import com.wpanther.pdfsigning.domain.port.out.PdfSagaReplyPort;

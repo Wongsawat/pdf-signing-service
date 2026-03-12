@@ -2,8 +2,8 @@ package com.wpanther.pdfsigning.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.pdfsigning.domain.event.PdfSignedNotificationEvent;
-import com.wpanther.pdfsigning.domain.event.PdfSigningFailedNotificationEvent;
+import com.wpanther.pdfsigning.application.dto.event.PdfSignedNotificationEvent;
+import com.wpanther.pdfsigning.application.dto.event.PdfSigningFailedNotificationEvent;
 import com.wpanther.pdfsigning.domain.port.out.PdfSignedEventPort;
 import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
