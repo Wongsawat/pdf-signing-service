@@ -1,6 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.in.camel;
 
-import com.wpanther.pdfsigning.domain.port.in.SagaCommandPort;
+import com.wpanther.pdfsigning.application.usecase.SagaCommandPort;
 import com.wpanther.pdfsigning.application.dto.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.application.dto.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.infrastructure.config.properties.KafkaProperties;

@@ -2,7 +2,7 @@ package com.wpanther.pdfsigning.infrastructure.adapter.out.storage;
 
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
-import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
+import com.wpanther.pdfsigning.application.port.out.DocumentStoragePort;
 import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

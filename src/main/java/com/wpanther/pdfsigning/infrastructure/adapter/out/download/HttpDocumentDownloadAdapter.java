@@ -1,7 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.download;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.domain.port.out.DocumentDownloadPort;
+import com.wpanther.pdfsigning.application.port.out.DocumentDownloadPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

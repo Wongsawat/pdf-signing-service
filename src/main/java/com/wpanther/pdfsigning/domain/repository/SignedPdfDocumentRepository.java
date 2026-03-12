@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.domain.port.out;
+package com.wpanther.pdfsigning.domain.repository;
 
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;

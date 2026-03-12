@@ -1,7 +1,7 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.domain.port.out.PdfGenerationPort;
+import com.wpanther.pdfsigning.application.port.out.PdfGenerationPort;
 import com.wpanther.pdfsigning.infrastructure.pdf.PadesSignatureEmbedder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

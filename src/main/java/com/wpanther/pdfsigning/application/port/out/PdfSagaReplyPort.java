@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.domain.port.out;
+package com.wpanther.pdfsigning.application.port.out;
 
 import com.wpanther.saga.domain.enums.SagaStep;
 

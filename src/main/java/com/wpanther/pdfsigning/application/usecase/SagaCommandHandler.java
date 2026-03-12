@@ -1,13 +1,11 @@
-package com.wpanther.pdfsigning.application.service;
+package com.wpanther.pdfsigning.application.usecase;
 
-import com.wpanther.pdfsigning.domain.port.in.SagaCommandPort;
 import com.wpanther.pdfsigning.application.dto.event.CompensatePdfSigningCommand;
 import com.wpanther.pdfsigning.application.dto.event.ProcessPdfSigningCommand;
+import com.wpanther.pdfsigning.application.port.out.PdfSignedEventPort;
+import com.wpanther.pdfsigning.application.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.model.*;
-import com.wpanther.pdfsigning.domain.port.out.PdfSignedEventPort;
-import com.wpanther.pdfsigning.domain.port.out.PdfSagaReplyPort;
-import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.domain.service.DomainPdfSigningService;
+import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
 import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
 import com.wpanther.pdfsigning.infrastructure.config.properties.PadesProperties;
 import lombok.RequiredArgsConstructor;

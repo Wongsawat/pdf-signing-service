@@ -1,11 +1,11 @@
-package com.wpanther.pdfsigning.domain.service;
+package com.wpanther.pdfsigning.application.usecase;
 
 import com.wpanther.pdfsigning.domain.model.*;
-import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.domain.port.out.DocumentDownloadPort;
-import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
-import com.wpanther.pdfsigning.domain.port.out.PdfGenerationPort;
-import com.wpanther.pdfsigning.domain.port.out.SigningPort;
+import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
+import com.wpanther.pdfsigning.application.port.out.DocumentDownloadPort;
+import com.wpanther.pdfsigning.application.port.out.DocumentStoragePort;
+import com.wpanther.pdfsigning.application.port.out.PdfGenerationPort;
+import com.wpanther.pdfsigning.application.port.out.SigningPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

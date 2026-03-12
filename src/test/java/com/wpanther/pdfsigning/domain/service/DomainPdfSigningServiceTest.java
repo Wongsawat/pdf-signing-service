@@ -1,11 +1,12 @@
 package com.wpanther.pdfsigning.domain.service;
 
+import com.wpanther.pdfsigning.application.usecase.DomainPdfSigningService;
 import com.wpanther.pdfsigning.domain.model.*;
-import com.wpanther.pdfsigning.domain.port.out.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.domain.port.out.DocumentDownloadPort;
-import com.wpanther.pdfsigning.domain.port.out.DocumentStoragePort;
-import com.wpanther.pdfsigning.domain.port.out.PdfGenerationPort;
-import com.wpanther.pdfsigning.domain.port.out.SigningPort;
+import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
+import com.wpanther.pdfsigning.application.port.out.DocumentDownloadPort;
+import com.wpanther.pdfsigning.application.port.out.DocumentStoragePort;
+import com.wpanther.pdfsigning.application.port.out.PdfGenerationPort;
+import com.wpanther.pdfsigning.application.port.out.SigningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
