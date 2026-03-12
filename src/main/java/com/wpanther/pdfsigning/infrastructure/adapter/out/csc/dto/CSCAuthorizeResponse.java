@@ -1,4 +1,4 @@
-package com.wpanther.pdfsigning.infrastructure.client.csc.dto;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

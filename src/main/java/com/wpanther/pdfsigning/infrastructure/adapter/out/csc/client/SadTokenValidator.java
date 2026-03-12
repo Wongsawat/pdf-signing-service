@@ -1,6 +1,6 @@
-package com.wpanther.pdfsigning.infrastructure.client.csc;
+package com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client;
 
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCAuthorizeResponse;
 import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

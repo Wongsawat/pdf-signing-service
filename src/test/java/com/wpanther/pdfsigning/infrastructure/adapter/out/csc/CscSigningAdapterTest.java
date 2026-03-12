@@ -1,12 +1,12 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.csc;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.infrastructure.client.csc.CSCApiClient;
-import com.wpanther.pdfsigning.infrastructure.client.csc.CSCAuthClient;
-import com.wpanther.pdfsigning.infrastructure.client.csc.SadTokenValidator;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCAuthorizeResponse;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureRequest;
-import com.wpanther.pdfsigning.infrastructure.client.csc.dto.CSCSignatureResponse;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.CSCApiClient;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.CSCAuthClient;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.SadTokenValidator;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCAuthorizeResponse;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureRequest;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureResponse;
 import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateParser;
 import com.wpanther.pdfsigning.infrastructure.pdf.CertificateValidator;
