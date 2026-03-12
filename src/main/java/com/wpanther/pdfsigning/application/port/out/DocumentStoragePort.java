@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.application.port.out;
 
+import com.wpanther.pdfsigning.domain.model.DocumentType;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
 
@@ -21,7 +22,7 @@ public interface DocumentStoragePort {
      * @return Storage URL that can be used to retrieve the document
      * @throws StorageException if storage fails
      */
-    String store(byte[] documentData, String documentType, SignedPdfDocument document) throws StorageException;
+    String store(byte[] documentData, DocumentType documentType, SignedPdfDocument document) throws StorageException;
 
     /**
      * Retrieve document data from storage.

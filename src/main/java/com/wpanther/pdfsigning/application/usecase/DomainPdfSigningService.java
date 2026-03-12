@@ -119,7 +119,7 @@ public class DomainPdfSigningService {
         log.debug("Storing signed PDF");
         String storageUrl = storagePort.store(
             signingResult.signedPdf(),
-            "SIGNED_PDF",
+            DocumentType.SIGNED_PDF,
             null  // Document is optional for storage
         );
         String storagePath = extractPathFromUrl(storageUrl);

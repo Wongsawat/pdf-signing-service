@@ -15,19 +15,6 @@ import java.security.cert.X509Certificate;
 public interface SigningPort {
 
     /**
-     * Sign a PDF with PAdES-BASELINE-T signature.
-     *
-     * @param pdfBytes  Original PDF bytes
-     * @param digest    Pre-computed SHA-256 digest of PDF byte range
-     * @param certChain Certificate chain for signature
-     * @return Signed PDF bytes
-     * @throws SigningException if signing fails
-     * @deprecated Use {@link #signPdfWithCertChain(byte[], byte[], PadesLevel)} instead
-     */
-    @Deprecated
-    byte[] signPdf(byte[] pdfBytes, byte[] digest, X509Certificate[] certChain) throws SigningException;
-
-    /**
      * Sign a PDF with PAdES signature and return certificate chain.
      * <p>
      * This method:

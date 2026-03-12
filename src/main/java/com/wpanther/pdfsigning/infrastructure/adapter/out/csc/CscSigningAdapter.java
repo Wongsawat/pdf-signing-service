@@ -48,14 +48,6 @@ public class CscSigningAdapter implements SigningPort {
     private final CscProperties cscProperties;
 
     @Override
-    public byte[] signPdf(byte[] pdfBytes, byte[] digest, X509Certificate[] certChain) {
-        log.debug("Starting CSC signing process (deprecated method)");
-        // Call new method with default BASELINE_B level
-        SigningResult result = signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B);
-        return result.signedPdf();
-    }
-
-    @Override
     public SigningResult signPdfWithCertChain(byte[] pdfBytes, byte[] digest, PadesLevel padesLevel) {
         log.debug("Starting CSC signing process with PAdES level: {}", padesLevel);
 

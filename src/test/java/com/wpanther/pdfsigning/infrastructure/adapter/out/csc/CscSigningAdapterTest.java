@@ -1,6 +1,8 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.csc;
 
+import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SigningException;
+import com.wpanther.pdfsigning.application.port.out.SigningPort;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.CSCApiClient;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.CSCAuthClient;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.client.SadTokenValidator;
@@ -107,10 +109,10 @@ class CscSigningAdapterTest {
             when(mockSignatureEmbedder.embedSignature(any(), any())).thenReturn(signedPdf);
 
             // When
-            byte[] result = adapter.signPdf(pdfBytes, digest, certChain);
+            SigningPort.SigningResult result = adapter.signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B);
 
             // Then
-            assertThat(result).isEqualTo(signedPdf);
+            assertThat(result.signedPdf()).isEqualTo(signedPdf);
             verify(mockAuthClient).authorize(any());
             verify(mockSadTokenValidator).validate(authResponse, "test-credential");
             verify(mockApiClient).signHash(any());
@@ -125,13 +127,12 @@ class CscSigningAdapterTest {
             // Given
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] digest = new byte[32];
-            X509Certificate[] certChain = new X509Certificate[0];
 
             when(mockAuthClient.authorize(any()))
                 .thenThrow(new RuntimeException("Auth failed"));
 
             // When/Then
-            assertThatThrownBy(() -> adapter.signPdf(pdfBytes, digest, certChain))
+            assertThatThrownBy(() -> adapter.signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B))
                 .isInstanceOf(SigningException.class)
                 .hasMessageContaining("Failed to sign PDF");
         }
@@ -142,7 +143,6 @@ class CscSigningAdapterTest {
             // Given
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] digest = new byte[32];
-            X509Certificate[] certChain = new X509Certificate[0];
 
             CSCAuthorizeResponse authResponse = new CSCAuthorizeResponse();
             authResponse.setSAD("test-sad-token");
@@ -152,7 +152,7 @@ class CscSigningAdapterTest {
                 .thenThrow(new RuntimeException("Signing failed"));
 
             // When/Then
-            assertThatThrownBy(() -> adapter.signPdf(pdfBytes, digest, certChain))
+            assertThatThrownBy(() -> adapter.signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B))
                 .isInstanceOf(SigningException.class)
                 .hasMessageContaining("Failed to sign PDF");
         }
