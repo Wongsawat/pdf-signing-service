@@ -1,8 +1,6 @@
-package com.wpanther.pdfsigning.application.service;
+package com.wpanther.pdfsigning.application.usecase;
 
 import com.wpanther.pdfsigning.application.dto.event.CompensatePdfSigningCommand;
-import com.wpanther.pdfsigning.application.dto.event.ProcessPdfSigningCommand;
-import com.wpanther.pdfsigning.application.usecase.SagaCommandHandler;
 import com.wpanther.pdfsigning.application.dto.event.ProcessPdfSigningCommand;
 import com.wpanther.pdfsigning.domain.model.PadesLevel;
 import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
@@ -10,7 +8,6 @@ import com.wpanther.pdfsigning.domain.model.SignedPdfDocumentId;
 import com.wpanther.pdfsigning.application.port.out.PdfSignedEventPort;
 import com.wpanther.pdfsigning.application.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.application.usecase.DomainPdfSigningService;
 import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
 import com.wpanther.pdfsigning.infrastructure.config.properties.PadesProperties;
 import com.wpanther.saga.domain.enums.SagaStep;
