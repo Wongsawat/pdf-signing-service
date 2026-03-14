@@ -50,15 +50,18 @@ public class LocalStorageAdapter implements DocumentStoragePort {
 
             Files.write(filePath, documentData);
 
-            String path = filePath.toString();
-            String relativePath = path.substring(basePath.length());
-            String url = baseUrl + "/documents" + relativePath.replace("\\", "/");
+            String relativePath = Paths.get(basePath).relativize(filePath).toString();
+            String url = baseUrl + "/documents/" + relativePath.replace("\\", "/");
 
-            log.info("Stored document locally: type={}, path={}, size={} bytes", documentType, path, documentData.length);
+            log.info("Stored document locally: type={}, path={}, size={} bytes", documentType, filePath, documentData.length);
             return url;
 
+        } catch (StorageException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to store document to local filesystem", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error storing document to local filesystem", e);
             throw new StorageException("Failed to store document to local filesystem: " + e.getMessage(), e);
         }
     }
@@ -71,8 +74,7 @@ public class LocalStorageAdapter implements DocumentStoragePort {
 
             // Convert URL back to filesystem path
             String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
-            String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
-            Path filePath = Path.of(path);
+            Path filePath = Paths.get(basePath, relativeUrl.replace("/", java.io.File.separator));
 
             if (!Files.exists(filePath)) {
                 throw new StorageException("Document not found: " + storageUrl);
@@ -83,9 +85,11 @@ public class LocalStorageAdapter implements DocumentStoragePort {
             return content;
 
         } catch (StorageException e) {
+            // Re-throw domain exceptions as-is
             throw e;
         } catch (Exception e) {
-            log.error("Failed to retrieve document from local filesystem", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error retrieving document from local filesystem", e);
             throw new StorageException("Failed to retrieve document: " + e.getMessage(), e);
         }
     }
@@ -108,16 +112,19 @@ public class LocalStorageAdapter implements DocumentStoragePort {
             }
 
             String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
-            String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
-            Path filePath = Path.of(path);
+            Path filePath = Paths.get(basePath, relativeUrl.replace("/", java.io.File.separator));
 
             if (Files.exists(filePath)) {
                 Files.delete(filePath);
-                log.info("Deleted document from local storage: {}", path);
+                log.info("Deleted document from local storage: {}", filePath);
             }
 
+        } catch (StorageException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to delete document from local filesystem", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error deleting document from local filesystem", e);
             throw new StorageException("Failed to delete document: " + e.getMessage(), e);
         }
     }

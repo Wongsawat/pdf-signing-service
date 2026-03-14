@@ -20,12 +20,12 @@ public enum DocumentType {
     SIGNED_PDF("SIGNED_PDF"),
 
     /**
-     * Test document type with underscore (for testing sanitization)
+     * Tax Invoice document type
      */
     TAX_INVOICE("TAX_INVOICE"),
 
     /**
-     * Test document type without underscore (for testing)
+     * Invoice document type
      */
     INVOICE("INVOICE");
 
@@ -48,7 +48,7 @@ public enum DocumentType {
      * Find DocumentType by string value.
      *
      * @param value String value to look up
-     * Corresponding DocumentType enum
+     * @return Corresponding DocumentType enum
      * @throws IllegalArgumentException if no matching type found
      */
     public static DocumentType fromValue(String value) {

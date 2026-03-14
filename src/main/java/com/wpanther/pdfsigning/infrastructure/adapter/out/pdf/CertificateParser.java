@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -34,8 +35,8 @@ public class CertificateParser {
     public X509Certificate[] parseCertificateChain(String pemCertificate) throws IOException {
         List<X509Certificate> certificates = new ArrayList<>();
 
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(pemCertificate.getBytes());
-             InputStreamReader isr = new InputStreamReader(bais);
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(pemCertificate.getBytes(StandardCharsets.UTF_8));
+             InputStreamReader isr = new InputStreamReader(bais, StandardCharsets.UTF_8);
              PEMParser parser = new PEMParser(isr)) {
 
             Object object;

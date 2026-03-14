@@ -114,8 +114,12 @@ public class CscSigningAdapter implements SigningPort {
             // Return both signed PDF and certificate chain
             return new SigningResult(signedPdf, responseCertChain);
 
+        } catch (SigningException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to sign PDF with CSC API", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error signing PDF with CSC API", e);
             throw new SigningException("Failed to sign PDF: " + e.getMessage(), e);
         }
     }
@@ -126,7 +130,12 @@ public class CscSigningAdapter implements SigningPort {
         try {
             certificateValidator.validateChain(certChain);
             log.debug("Certificate chain validated successfully");
+        } catch (SigningException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
+            // Wrap unexpected exceptions
+            log.error("Unexpected error validating certificate chain", e);
             throw new SigningException("Certificate validation failed: " + e.getMessage(), e);
         }
     }

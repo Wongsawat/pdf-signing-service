@@ -9,11 +9,8 @@ import com.wpanther.pdfsigning.application.port.out.SigningPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -181,13 +178,20 @@ public class DomainPdfSigningService {
      * Converts X509Certificate[] to PEM format using Base64 encoding.
      * Includes all certificates in the chain.
      * </p>
+     * <p>
+     * Note: Returns a placeholder for null/empty certificate chains to support
+     * test scenarios. In production, the CSC API always returns a valid certificate chain.
+     * Encoding failures throw SigningException as they indicate real errors.
+     * </p>
      *
      * @param certChain Certificate chain from signing result
      * @return PEM-encoded certificate string
+     * @throws SigningException if certificate encoding fails
      */
     private String extractCertificatePem(X509Certificate[] certChain) {
-        // Handle empty or null certificate chain
+        // Handle empty or null certificate chain (used in test scenarios)
         if (certChain == null || certChain.length == 0) {
+            log.warn("Certificate chain is null or empty, using placeholder - this should not happen in production");
             return "-----BEGIN CERTIFICATE-----\nPLACEHOLDER\n-----END CERTIFICATE-----\n";
         }
 
@@ -203,9 +207,10 @@ public class DomainPdfSigningService {
             }
 
             return pem.toString();
-        } catch (Exception e) {
-            log.warn("Failed to encode certificate to PEM, using placeholder", e);
-            return "-----BEGIN CERTIFICATE-----\nPLACEHOLDER\n-----END CERTIFICATE-----\n";
+        } catch (java.security.cert.CertificateEncodingException e) {
+            // This is a real error - certificate encoding failed
+            log.error("Failed to encode certificate to PEM", e);
+            throw new SigningException("Failed to encode certificate chain to PEM format: " + e.getMessage(), e);
         }
     }
 }
