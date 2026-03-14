@@ -5,7 +5,7 @@ import com.wpanther.pdfsigning.domain.model.SignedPdfDocument;
 import com.wpanther.pdfsigning.domain.model.StorageException;
 import com.wpanther.pdfsigning.application.port.out.DocumentStoragePort;
 import com.wpanther.pdfsigning.infrastructure.config.properties.StorageProperties;
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -31,21 +31,35 @@ import java.time.LocalDate;
  */
 @Component
 @ConditionalOnProperty(name = "app.storage.provider", havingValue = "s3")
-@RequiredArgsConstructor
 @Slf4j
 public class S3StorageAdapter implements DocumentStoragePort {
 
     private final StorageProperties storageProperties;
-    private S3Client s3Client;
-    private String baseUrl;
+    private volatile S3Client s3Client;
+    private volatile String baseUrl;
+
+    /**
+     * Constructor for Spring-managed bean.
+     * S3 client is initialized via @PostConstruct after properties are injected.
+     */
+    public S3StorageAdapter(StorageProperties storageProperties) {
+        this.storageProperties = storageProperties;
+    }
 
     /**
      * Initializes the S3 client and base URL from configuration.
-     * Called by Spring after properties are injected.
+     * Called by Spring after constructor and property injection.
+     * This method is synchronized to ensure thread-safe initialization.
      */
-    public void init() {
+    @PostConstruct
+    public synchronized void init() {
+        // Double-check initialization idempotency
+        if (this.s3Client != null) {
+            return;
+        }
+
         StorageProperties.S3 s3 = storageProperties.getS3();
-        this.baseUrl = s3.getBaseUrl() != null && !s3.getBaseUrl().isEmpty()
+        String computedBaseUrl = s3.getBaseUrl() != null && !s3.getBaseUrl().isEmpty()
             ? s3.getBaseUrl()
             : "https://s3." + s3.getRegion() + ".amazonaws.com/" + s3.getBucketName() + "/";
 
@@ -69,6 +83,7 @@ public class S3StorageAdapter implements DocumentStoragePort {
         }
 
         this.s3Client = s3Builder.build();
+        this.baseUrl = computedBaseUrl;
 
         log.info("Initialized S3 document storage adapter: bucket={}, region={}",
             s3.getBucketName(), s3.getRegion());
@@ -77,6 +92,7 @@ public class S3StorageAdapter implements DocumentStoragePort {
     /**
      * Constructor for testing with injected S3Client.
      * Package-private for test access only.
+     * This bypasses @PostConstruct initialization for unit testing.
      */
     S3StorageAdapter(StorageProperties storageProperties, S3Client s3Client, String baseUrl) {
         this.storageProperties = storageProperties;
@@ -86,10 +102,6 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     @Override
     public String store(byte[] documentData, DocumentType documentType, SignedPdfDocument document) {
-        if (s3Client == null) {
-            init();
-        }
-
         try {
             StorageProperties.S3 s3 = storageProperties.getS3();
             String documentId = document != null ? document.getId().getValue().toString() : "unknown";
@@ -119,10 +131,6 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     @Override
     public byte[] retrieve(String storageUrl) {
-        if (s3Client == null) {
-            init();
-        }
-
         try {
             StorageProperties.S3 s3 = storageProperties.getS3();
             // Extract key from pre-signed URL or use directly if it's just a key
@@ -148,10 +156,6 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     @Override
     public void delete(String storageUrl) {
-        if (s3Client == null) {
-            init();
-        }
-
         try {
             StorageProperties.S3 s3 = storageProperties.getS3();
             String key = extractKeyFromUrl(storageUrl);

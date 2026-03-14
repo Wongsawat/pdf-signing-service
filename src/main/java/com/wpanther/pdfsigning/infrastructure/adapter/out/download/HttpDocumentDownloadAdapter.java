@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 /**
  * HTTP-based adapter for downloading PDF documents.
@@ -26,6 +27,12 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int READ_TIMEOUT_MS = 30000;
     private static final int MAX_PDF_SIZE = 100 * 1024 * 1024; // 100 MB
+
+    /**
+     * PDF file header bytes: %PDF-
+     * PDF files must start with these 5 bytes (0x25 = %, 0x50 = P, 0x44 = D, 0x46 = F, 0x2D = -)
+     */
+    private static final byte[] PDF_HEADER = new byte[] {0x25, 0x50, 0x44, 0x46, 0x2D};
 
     @Override
     public byte[] downloadPdf(String url) {
@@ -58,10 +65,8 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
                         throw new SigningException("Received empty PDF from URL: " + url);
                     }
 
-                    // Basic PDF validation - check for %PDF- header
-                    if (pdfBytes.length < 4 || !new String(pdfBytes, 0, 4).equals("%PDF")) {
-                        throw new SigningException("Downloaded file is not a valid PDF: " + url);
-                    }
+                    // PDF validation - check for %PDF- header (5 bytes minimum)
+                    validatePdfHeader(pdfBytes, url);
 
                     log.debug("Downloaded PDF: {} bytes from {}", pdfBytes.length, url);
                     return pdfBytes;
@@ -71,6 +76,27 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
             }
         } catch (IOException e) {
             throw new SigningException("Failed to download PDF from URL: " + url, e);
+        }
+    }
+
+    /**
+     * Validates that the file has a valid PDF header (%PDF-).
+     *
+     * @param pdfBytes The downloaded file bytes
+     * @param url The source URL (for error messages)
+     * @throws SigningException if the file is not a valid PDF
+     */
+    private void validatePdfHeader(byte[] pdfBytes, String url) throws SigningException {
+        if (pdfBytes.length < PDF_HEADER.length) {
+            throw new SigningException(
+                "File too small to be a valid PDF: " + pdfBytes.length + " bytes (min: " + PDF_HEADER.length + ") from " + url);
+        }
+
+        for (int i = 0; i < PDF_HEADER.length; i++) {
+            if (pdfBytes[i] != PDF_HEADER[i]) {
+                throw new SigningException(
+                    "Downloaded file is not a valid PDF: invalid header at position " + i + " from " + url);
+            }
         }
     }
 }

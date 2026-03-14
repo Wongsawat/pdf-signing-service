@@ -14,6 +14,12 @@ buildNumber.properties
 .idea/
 *.iml
 
+# IDE - Eclipse
+.classpath
+.factorypath
+.project
+.settings/
+
 # Claude Code
 CLAUDE.md
 SAGA_MIGRATION_PLAN.md
