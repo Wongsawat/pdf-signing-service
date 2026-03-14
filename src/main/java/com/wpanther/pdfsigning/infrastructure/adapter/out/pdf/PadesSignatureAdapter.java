@@ -38,8 +38,12 @@ public class PadesSignatureAdapter implements PdfGenerationPort {
             );
             log.debug("Computed digest: {} bytes", digest.length);
             return digest;
+        } catch (SigningException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to compute byte range digest", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error computing byte range digest", e);
             throw new SigningException("Failed to compute PDF digest: " + e.getMessage(), e);
         }
     }
@@ -51,8 +55,12 @@ public class PadesSignatureAdapter implements PdfGenerationPort {
             byte[] signedPdf = signatureEmbedder.embedSignature(pdfBytes, cmsSignature);
             log.debug("Embedded signature, signed PDF size: {} bytes", signedPdf.length);
             return signedPdf;
+        } catch (SigningException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to embed signature into PDF", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error embedding signature into PDF", e);
             throw new SigningException("Failed to embed signature: " + e.getMessage(), e);
         }
     }

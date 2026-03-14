@@ -123,8 +123,16 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
             return url;
 
+        } catch (StorageException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (S3Exception e) {
+            // Wrap S3-specific exceptions
             log.error("Failed to store document in S3", e);
+            throw new StorageException("Failed to store document in S3: " + e.getMessage(), e);
+        } catch (Exception e) {
+            // Wrap unexpected exceptions
+            log.error("Unexpected error storing document in S3", e);
             throw new StorageException("Failed to store document in S3: " + e.getMessage(), e);
         }
     }
@@ -147,9 +155,11 @@ public class S3StorageAdapter implements DocumentStoragePort {
             }
 
         } catch (StorageException e) {
+            // Re-throw domain exceptions as-is
             throw e;
         } catch (Exception e) {
-            log.error("Failed to retrieve document from S3", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error retrieving document from S3", e);
             throw new StorageException("Failed to retrieve document: " + e.getMessage(), e);
         }
     }
@@ -168,8 +178,12 @@ public class S3StorageAdapter implements DocumentStoragePort {
             s3Client.deleteObject(deleteObjectRequest);
             log.info("Deleted document from S3: bucket={}, key={}", s3.getBucketName(), key);
 
+        } catch (StorageException e) {
+            // Re-throw domain exceptions as-is
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to delete document from S3", e);
+            // Wrap unexpected exceptions
+            log.error("Unexpected error deleting document from S3", e);
             throw new StorageException("Failed to delete document: " + e.getMessage(), e);
         }
     }

@@ -167,9 +167,36 @@ public class SagaCommandHandler implements SagaCommandPort {
             log.info("PDF signing completed successfully for documentId={}, sagaId={}",
                 command.getDocumentId(), command.getSagaId());
 
-        } catch (Exception e) {
-            // 5. Handle signing failure
+        } catch (SigningException | StorageException e) {
+            // 5. Handle expected business exceptions
             log.error("PDF signing failed for documentId={}, sagaId={}",
+                command.getDocumentId(), command.getSagaId(), e);
+
+            // Get the document to mark as failed
+            documentRepository.findByInvoiceId(command.getDocumentId()).ifPresent(document -> {
+                document.markFailed(e.getMessage());
+                document.incrementRetryCount();
+                documentRepository.save(document);
+            });
+
+            // Send FAILURE reply AND notification event
+            sagaReplyPort.publishFailure(
+                command.getSagaId(),
+                command.getSagaStep(),
+                command.getCorrelationId(),
+                e.getMessage()
+            );
+            pdfSignedEventPort.publishPdfSigningFailureNotification(
+                command.getSagaId(),
+                command.getDocumentId(),
+                command.getInvoiceNumber(),
+                command.getDocumentType(),
+                e.getMessage(),
+                command.getCorrelationId()
+            );
+        } catch (Exception e) {
+            // 5b. Handle unexpected exceptions (may indicate bugs)
+            log.error("Unexpected error during PDF signing for documentId={}, sagaId={}",
                 command.getDocumentId(), command.getSagaId(), e);
 
             // Get the document to mark as failed
