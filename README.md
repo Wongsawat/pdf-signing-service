@@ -391,7 +391,7 @@ mvn spring-boot:run
 ### Run Tests
 
 ```bash
-# Run all tests (266 unit tests)
+# Run all tests (188 unit tests)
 mvn test
 
 # Run with coverage (JaCoCo 90% requirement)
@@ -468,6 +468,17 @@ src/main/java/com/wpanther/pdfsigning/
 - **Dual-Publishing**: Saga replies (to orchestrator) + notifications (to observer)
 - **Deferred Signing**: PDF byte range digest computed locally, signature via CSC signHash
 
+### Code Quality & Security
+
+The codebase maintains high standards through:
+- **Thread Safety**: Proper `@PostConstruct` initialization with `synchronized` methods and `volatile` fields
+- **Charset Encoding**: Explicit UTF-8 encoding for all string operations (prevents platform-default issues)
+- **Input Validation**: PDF header validation (5-byte magic number check), file size limits
+- **Exception Handling**: Specific exception catching (domain exceptions vs unexpected errors)
+- **Cross-Platform**: Windows-compatible path handling using `Path.relativize()` and `java.io.File.separator`
+- **Test Coverage**: 188 unit tests with JaCoCo 90% line coverage requirement per package
+- **Documentation**: Comprehensive Javadoc on all public APIs
+
 ## Key Features
 
 ### Hexagonal Architecture
@@ -517,6 +528,32 @@ src/main/java/com/wpanther/pdfsigning/
 ### Apache Camel Error Handling
 - Dead Letter Channel with exponential backoff
 - Failed events routed to DLQ topic
+
+## Recent Changes
+
+### Hexagonal Architecture Migration (2025)
+
+Complete migration to hexagonal architecture with improved code quality:
+
+**Architecture:**
+- Migrated from layered to hexagonal architecture (ports and adapters pattern)
+- Domain layer now framework-independent with no Spring dependencies
+- Application layer orchestrates use cases via domain services
+- Infrastructure layer contains all external system adapters
+
+**Code Quality Improvements:**
+- Fixed thread safety issues in S3StorageAdapter (@PostConstruct + volatile)
+- Added explicit UTF-8 charset encoding to prevent platform-specific issues
+- Implemented proper PDF header validation (5-byte magic number check)
+- Improved Windows path handling with Path.relativize()
+- Added specific exception catching (domain vs unexpected exceptions)
+- Enhanced certificate encoding error handling
+- Removed unused imports and improved Javadoc coverage
+
+**Test Results:**
+- All 188 unit tests passing
+- JaCoCo coverage: 90% line coverage requirement per package
+- BUILD SUCCESS verified
 
 ## CSC API Integration (Deferred Signing)
 
