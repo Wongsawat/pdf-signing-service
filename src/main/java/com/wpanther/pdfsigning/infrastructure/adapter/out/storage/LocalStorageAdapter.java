@@ -50,11 +50,10 @@ public class LocalStorageAdapter implements DocumentStoragePort {
 
             Files.write(filePath, documentData);
 
-            String path = filePath.toString();
-            String relativePath = path.substring(basePath.length());
-            String url = baseUrl + "/documents" + relativePath.replace("\\", "/");
+            String relativePath = Paths.get(basePath).relativize(filePath).toString();
+            String url = baseUrl + "/documents/" + relativePath.replace("\\", "/");
 
-            log.info("Stored document locally: type={}, path={}, size={} bytes", documentType, path, documentData.length);
+            log.info("Stored document locally: type={}, path={}, size={} bytes", documentType, filePath, documentData.length);
             return url;
 
         } catch (Exception e) {
@@ -71,8 +70,7 @@ public class LocalStorageAdapter implements DocumentStoragePort {
 
             // Convert URL back to filesystem path
             String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
-            String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
-            Path filePath = Path.of(path);
+            Path filePath = Paths.get(basePath, relativeUrl.replace("/", java.io.File.separator));
 
             if (!Files.exists(filePath)) {
                 throw new StorageException("Document not found: " + storageUrl);
@@ -108,12 +106,11 @@ public class LocalStorageAdapter implements DocumentStoragePort {
             }
 
             String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
-            String path = basePath + relativeUrl.replace("/", Path.of("/").toString());
-            Path filePath = Path.of(path);
+            Path filePath = Paths.get(basePath, relativeUrl.replace("/", java.io.File.separator));
 
             if (Files.exists(filePath)) {
                 Files.delete(filePath);
-                log.info("Deleted document from local storage: {}", path);
+                log.info("Deleted document from local storage: {}", filePath);
             }
 
         } catch (Exception e) {
