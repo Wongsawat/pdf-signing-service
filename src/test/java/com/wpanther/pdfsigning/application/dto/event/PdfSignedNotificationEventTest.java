@@ -82,9 +82,9 @@ class PdfSignedNotificationEventTest {
 
             // When - using @JsonCreator constructor
             PdfSignedNotificationEvent event = new PdfSignedNotificationEvent(
-                eventId, occurredAt, eventType, version, sagaId, source, traceType, context,
+                eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context,
                 invoiceId, invoiceNumber, documentType, signedDocumentId, signedPdfUrl, signedPdfSize,
-                signatureLevel, signatureTimestamp, correlationId
+                signatureLevel, signatureTimestamp
             );
 
             // Then
@@ -93,6 +93,7 @@ class PdfSignedNotificationEventTest {
             assertThat(event.getInvoiceId()).isEqualTo(invoiceId);
             assertThat(event.getSignedPdfUrl()).isEqualTo(signedPdfUrl);
             assertThat(event.getSignatureTimestamp()).isEqualTo(signatureTimestamp);
+            assertThat(event.getCorrelationId()).isEqualTo(correlationId);
         }
 
         @Test
@@ -103,24 +104,24 @@ class PdfSignedNotificationEventTest {
             Instant occurredAt = Instant.now();
 
             PdfSignedNotificationEvent event1 = new PdfSignedNotificationEvent(
-                eventId, occurredAt, "PdfSigned", 1, "saga-1", "pdf-signing-service",
+                eventId, occurredAt, "PdfSigned", 1, "saga-1", "corr-1", "pdf-signing-service",
                 "PdfSigned", null, "inv-1", "INV-001", "INVOICE",
                 "doc-1", "http://example.com/1.pdf", 1000L,
-                "PAdES-BASELINE-T", Instant.now(), "corr-1"
+                "PAdES-BASELINE-T", Instant.now()
             );
 
             PdfSignedNotificationEvent event2 = new PdfSignedNotificationEvent(
-                eventId, occurredAt, "PdfSigned", 1, "saga-1", "pdf-signing-service",
+                eventId, occurredAt, "PdfSigned", 1, "saga-1", "corr-1", "pdf-signing-service",
                 "PdfSigned", null, "inv-1", "INV-001", "INVOICE",
                 "doc-1", "http://example.com/1.pdf", 1000L,
-                "PAdES-BASELINE-T", Instant.now(), "corr-1"
+                "PAdES-BASELINE-T", Instant.now()
             );
 
             PdfSignedNotificationEvent event3 = new PdfSignedNotificationEvent(
-                UUID.randomUUID(), occurredAt, "PdfSigned", 1, "saga-2", "pdf-signing-service",
+                UUID.randomUUID(), occurredAt, "PdfSigned", 1, "saga-2", "corr-2", "pdf-signing-service",
                 "PdfSigned", null, "inv-2", "INV-002", "INVOICE",
                 "doc-2", "http://example.com/2.pdf", 2000L,
-                "PAdES-BASELINE-B", Instant.now(), "corr-2"
+                "PAdES-BASELINE-B", Instant.now()
             );
 
             // Then - equals
@@ -208,8 +209,8 @@ class PdfSignedNotificationEventTest {
 
             // When - using @JsonCreator constructor
             PdfSigningFailedNotificationEvent event = new PdfSigningFailedNotificationEvent(
-                eventId, occurredAt, eventType, version, sagaId, source, traceType, context,
-                invoiceId, invoiceNumber, documentType, errorMessage, correlationId
+                eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context,
+                invoiceId, invoiceNumber, documentType, errorMessage
             );
 
             // Then
@@ -217,6 +218,7 @@ class PdfSignedNotificationEventTest {
             assertThat(event.getOccurredAt()).isEqualTo(occurredAt);
             assertThat(event.getInvoiceId()).isEqualTo(invoiceId);
             assertThat(event.getErrorMessage()).isEqualTo(errorMessage);
+            assertThat(event.getCorrelationId()).isEqualTo(correlationId);
         }
 
         @Test
@@ -227,21 +229,21 @@ class PdfSignedNotificationEventTest {
             Instant occurredAt = Instant.now();
 
             PdfSigningFailedNotificationEvent event1 = new PdfSigningFailedNotificationEvent(
-                eventId, occurredAt, "PdfSigningFailed", 1, "saga-1", "pdf-signing-service",
+                eventId, occurredAt, "PdfSigningFailed", 1, "saga-1", "corr-1", "pdf-signing-service",
                 "PdfSigningFailed", null, "inv-1", "INV-001", "INVOICE",
-                "Error 1", "corr-1"
+                "Error 1"
             );
 
             PdfSigningFailedNotificationEvent event2 = new PdfSigningFailedNotificationEvent(
-                eventId, occurredAt, "PdfSigningFailed", 1, "saga-1", "pdf-signing-service",
+                eventId, occurredAt, "PdfSigningFailed", 1, "saga-1", "corr-1", "pdf-signing-service",
                 "PdfSigningFailed", null, "inv-1", "INV-001", "INVOICE",
-                "Error 1", "corr-1"
+                "Error 1"
             );
 
             PdfSigningFailedNotificationEvent event3 = new PdfSigningFailedNotificationEvent(
-                UUID.randomUUID(), occurredAt, "PdfSigningFailed", 1, "saga-2", "pdf-signing-service",
+                UUID.randomUUID(), occurredAt, "PdfSigningFailed", 1, "saga-2", "corr-2", "pdf-signing-service",
                 "PdfSigningFailed", null, "inv-2", "INV-002", "INVOICE",
-                "Error 2", "corr-2"
+                "Error 2"
             );
 
             // Then - equals

@@ -48,9 +48,6 @@ public class PdfSignedNotificationEvent extends TraceEvent {
     @JsonProperty("signatureTimestamp")
     private final Instant signatureTimestamp;
 
-    @JsonProperty("correlationId")
-    private final String correlationId;
-
     /**
      * Factory method for creating new notification events.
      */
@@ -88,7 +85,7 @@ public class PdfSignedNotificationEvent extends TraceEvent {
             Instant signatureTimestamp,
             String correlationId) {
 
-        super(sagaId, SOURCE, TRACE_TYPE, null);
+        super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
@@ -97,7 +94,6 @@ public class PdfSignedNotificationEvent extends TraceEvent {
         this.signedPdfSize = signedPdfSize;
         this.signatureLevel = signatureLevel;
         this.signatureTimestamp = signatureTimestamp;
-        this.correlationId = correlationId;
     }
 
     /**
@@ -111,6 +107,7 @@ public class PdfSignedNotificationEvent extends TraceEvent {
         @JsonProperty("eventType") String eventType,
         @JsonProperty("version") int version,
         @JsonProperty("sagaId") String sagaId,
+        @JsonProperty("correlationId") String correlationId,
         @JsonProperty("source") String source,
         @JsonProperty("traceType") String traceType,
         @JsonProperty("context") String context,
@@ -121,10 +118,9 @@ public class PdfSignedNotificationEvent extends TraceEvent {
         @JsonProperty("signedPdfUrl") String signedPdfUrl,
         @JsonProperty("signedPdfSize") Long signedPdfSize,
         @JsonProperty("signatureLevel") String signatureLevel,
-        @JsonProperty("signatureTimestamp") Instant signatureTimestamp,
-        @JsonProperty("correlationId") String correlationId
+        @JsonProperty("signatureTimestamp") Instant signatureTimestamp
     ) {
-        super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
+        super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
@@ -133,6 +129,5 @@ public class PdfSignedNotificationEvent extends TraceEvent {
         this.signedPdfSize = signedPdfSize;
         this.signatureLevel = signatureLevel;
         this.signatureTimestamp = signatureTimestamp;
-        this.correlationId = correlationId;
     }
 }

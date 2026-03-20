@@ -34,9 +34,6 @@ public class PdfSigningFailedNotificationEvent extends TraceEvent {
     @JsonProperty("errorMessage")
     private final String errorMessage;
 
-    @JsonProperty("correlationId")
-    private final String correlationId;
-
     /**
      * Factory method for creating new notification events.
      */
@@ -65,12 +62,11 @@ public class PdfSigningFailedNotificationEvent extends TraceEvent {
             String errorMessage,
             String correlationId) {
 
-        super(sagaId, SOURCE, TRACE_TYPE, null);
+        super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
         this.errorMessage = errorMessage;
-        this.correlationId = correlationId;
     }
 
     /**
@@ -83,20 +79,19 @@ public class PdfSigningFailedNotificationEvent extends TraceEvent {
         @JsonProperty("eventType") String eventType,
         @JsonProperty("version") int version,
         @JsonProperty("sagaId") String sagaId,
+        @JsonProperty("correlationId") String correlationId,
         @JsonProperty("source") String source,
         @JsonProperty("traceType") String traceType,
         @JsonProperty("context") String context,
         @JsonProperty("invoiceId") String invoiceId,
         @JsonProperty("invoiceNumber") String invoiceNumber,
         @JsonProperty("documentType") String documentType,
-        @JsonProperty("errorMessage") String errorMessage,
-        @JsonProperty("correlationId") String correlationId
+        @JsonProperty("errorMessage") String errorMessage
     ) {
-        super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
+        super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentType = documentType;
         this.errorMessage = errorMessage;
-        this.correlationId = correlationId;
     }
 }
