@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -224,7 +226,17 @@ public class SagaCommandHandler implements SagaCommandPort {
 
     /**
      * Handles CompensatePdfSigningCommand from saga orchestrator.
-     * Deletes the signed document and sends COMPENSATED reply.
+     * Deletes the signed document from storage and database, then sends COMPENSATED reply.
+     *
+     * <p>COMPENSATED is sent via {@link TransactionSynchronization#afterCommit()} so it
+     * only fires if the entire transaction (including the DB delete) commits. If the
+     * transaction rolls back, FAILURE is sent instead. This ensures the saga orchestrator
+     * receives an accurate result even though storage and DB deletions are not atomic
+     * (storage commits independently).</p>
+     *
+     * <p>On retry after a partial failure (storage deleted, DB delete threw): the storage
+     * delete is idempotent (S3/filesystem delete is a no-op if already gone) and the
+     * DB delete will succeed, so the saga converges to COMPENSATED.</p>
      */
     @Transactional
     public void handleCompensation(CompensatePdfSigningCommand command) {
@@ -250,22 +262,37 @@ public class SagaCommandHandler implements SagaCommandPort {
                     command.getDocumentId());
             }
 
-            // 3. Send COMPENSATED reply (idempotent)
-            // Note: No notification event for compensation - orchestrator handles that
-            sagaReplyPort.publishCompensated(
-                command.getSagaId(),
-                command.getSagaStep(),
-                command.getCorrelationId()
-            );
-
-            log.info("Compensation completed for sagaId={}, documentId={}",
-                command.getSagaId(), command.getDocumentId());
+            // 3. Register COMPENSATED to fire only after transaction commits.
+            // If deleteById or any prior step throws, afterCommit is never registered
+            // and the catch block below sends FAILURE instead.
+            // Note: No notification event for compensation - orchestrator handles that.
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        sagaReplyPort.publishCompensated(
+                            command.getSagaId(),
+                            command.getSagaStep(),
+                            command.getCorrelationId()
+                        );
+                        log.info("Compensation committed, COMPENSATED reply sent for sagaId={}, documentId={}",
+                            command.getSagaId(), command.getDocumentId());
+                    }
+                });
+            } else {
+                // No active transaction — can send COMPENSATED immediately (unit test context)
+                sagaReplyPort.publishCompensated(
+                    command.getSagaId(),
+                    command.getSagaStep(),
+                    command.getCorrelationId()
+                );
+            }
 
         } catch (Exception e) {
             log.error("Failed to compensate PDF signing for sagaId={}, documentId={}",
                 command.getSagaId(), command.getDocumentId(), e);
 
-            // Send FAILURE reply if compensation fails
+            // Send FAILURE reply if compensation fails — transaction will roll back
             sagaReplyPort.publishFailure(
                 command.getSagaId(),
                 command.getSagaStep(),
