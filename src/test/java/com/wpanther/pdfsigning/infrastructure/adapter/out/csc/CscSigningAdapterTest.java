@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -140,6 +141,28 @@ class CscSigningAdapterTest {
             assertThatThrownBy(() -> adapter.signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B))
                 .isInstanceOf(SigningException.class)
                 .hasMessageContaining("Failed to sign PDF");
+        }
+
+        @Test
+        @DisplayName("Should throw SigningException when SAD token expires before signHash")
+        void shouldThrowWhenSadTokenExpiredBeforeSignHash() {
+            // Given
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+
+            CSCAuthorizeResponse authResponse = new CSCAuthorizeResponse();
+            authResponse.setSAD("test-sad-token");
+            authResponse.setExpiresIn(1L);
+
+            when(mockAuthClient.authorize(any())).thenReturn(authResponse);
+            when(mockSadTokenValidator.isExpired(any(Instant.class), any(Long.class))).thenReturn(true);
+
+            // When/Then
+            assertThatThrownBy(() -> adapter.signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("expired");
+
+            verify(mockApiClient, never()).signHash(any());
         }
 
         @Test

@@ -146,16 +146,18 @@ public class CertificateValidator {
                 certValidityDays, maxValidity);
         }
 
-        // 4. Check key usage for digital signatures
+        // 4. Check key usage for digital signatures (required for Thai e-Tax signing)
         boolean[] keyUsage = cert.getKeyUsage();
         if (keyUsage != null) {
             // KeyUsage bit 0 = digitalSignature
             if (!keyUsage[0]) {
-                log.warn("Certificate keyUsage does not include digitalSignature");
+                throw new CertificateValidationException(
+                    "Certificate keyUsage does not include digitalSignature (bit 0 required for e-Tax signing)");
             }
             // KeyUsage bit 1 = nonRepudiation
             if (!keyUsage[1]) {
-                log.warn("Certificate keyUsage does not include nonRepudiation");
+                throw new CertificateValidationException(
+                    "Certificate keyUsage does not include nonRepudiation (bit 1 required for e-Tax signing)");
             }
         }
 

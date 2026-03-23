@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Base64;
 
 /**
@@ -54,6 +55,9 @@ public class CscSigningAdapter implements SigningPort {
         log.debug("Starting CSC signing process with PAdES level: {}", padesLevel);
 
         try {
+            // Record time before authorize so we can detect expiration before signHash
+            Instant authIssuedAt = Instant.now();
+
             // Step 1: Authorize with CSC API to get SAD token
             log.debug("Authorizing signing operation with CSC API");
             String base64urlDigest = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
@@ -82,6 +86,12 @@ public class CscSigningAdapter implements SigningPort {
                     .hashToSign(new String[]{base64urlDigest})
                     .build())
                 .build();
+
+            // Security critical: verify token hasn't expired since authorization (clock-based)
+            if (sadTokenValidator.isExpired(authIssuedAt, authResponse.getExpiresIn())) {
+                throw new SigningException(
+                    "SAD token expired between authorization and sign operation");
+            }
 
             CSCSignatureResponse signResponse = apiClient.signHash(signRequest);
             log.debug("Received signature from CSC API");
