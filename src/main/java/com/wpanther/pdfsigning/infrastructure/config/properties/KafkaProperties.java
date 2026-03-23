@@ -27,6 +27,22 @@ public class KafkaProperties {
     private String bootstrapServers = "localhost:9092";
 
     /**
+     * Kafka consumer group ID for saga command consumer.
+     * Separate from compensation consumer so command and compensation partitions
+     * don't compete for the same consumer pool.
+     */
+    @NotBlank
+    private String commandConsumerGroup = "pdf-signing-service-command";
+
+    /**
+     * Kafka consumer group ID for saga compensation consumer.
+     * Separate from command consumer so compensation messages are processed
+     * independently of command throughput.
+     */
+    @NotBlank
+    private String compensationConsumerGroup = "pdf-signing-service-compensation";
+
+    /**
      * Topic configuration for various Kafka topics.
      */
     private final Topics topics = new Topics();

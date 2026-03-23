@@ -52,7 +52,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         from("kafka:" + sagaCommandTopic
                         + "?brokers=" + kafkaBrokers
-                        + "&groupId=pdf-signing-service"
+                        + "&groupId=" + kafkaProperties.getCommandConsumerGroup()
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
@@ -74,7 +74,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         from("kafka:" + sagaCompensationTopic
                         + "?brokers=" + kafkaBrokers
-                        + "&groupId=pdf-signing-service"
+                        + "&groupId=" + kafkaProperties.getCompensationConsumerGroup()
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
