@@ -158,7 +158,7 @@ public class PadesCmsBuilder {
         }
 
         @Override
-        @SuppressWarnings("rawtypes")
+        @SuppressWarnings("rawtypes") // BouncyCastle CMSAttributeTableGenerator declares raw Map; no generic variant exists
         public AttributeTable getAttributes(Map params) {
             Hashtable<ASN1ObjectIdentifier, ASN1Encodable> attributes = new Hashtable<>();
 
