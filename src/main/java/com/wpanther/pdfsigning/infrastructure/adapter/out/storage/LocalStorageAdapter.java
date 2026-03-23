@@ -111,20 +111,16 @@ public class LocalStorageAdapter implements DocumentStoragePort {
             if (!storageUrl.startsWith(baseUrl)) {
                 // Assume storageUrl is already a filesystem path
                 Path filePath = Path.of(storageUrl);
-                if (Files.exists(filePath)) {
-                    Files.delete(filePath);
-                    log.info("Deleted document from local storage: {}", storageUrl);
-                }
+                Files.deleteIfExists(filePath);
+                log.info("Deleted document from local storage: {}", storageUrl);
                 return;
             }
 
             String relativeUrl = storageUrl.substring(baseUrl.length() + "/documents".length());
             Path filePath = Paths.get(basePath, relativeUrl.replace("/", java.io.File.separator));
 
-            if (Files.exists(filePath)) {
-                Files.delete(filePath);
-                log.info("Deleted document from local storage: {}", filePath);
-            }
+            Files.deleteIfExists(filePath);
+            log.info("Deleted document from local storage: {}", filePath);
 
         } catch (StorageException e) {
             // Re-throw domain exceptions as-is
