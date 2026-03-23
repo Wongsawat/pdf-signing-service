@@ -1,5 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
+import com.wpanther.pdfsigning.domain.model.SigningException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -168,8 +169,8 @@ public class PadesSignatureEmbedder {
         Store certStore = new JcaCertStore(Arrays.asList(certChain));
         generator.addCertificates(certStore);
 
-        // Create signer info with pre-computed signature
-        ContentSigner signer = new PrecomputedContentSigner(rawSignature);
+        // Create signer info with pre-computed signature; algorithm derived from cert key type
+        ContentSigner signer = new PrecomputedContentSigner(rawSignature, certChain[0]);
 
         DigestCalculatorProvider digestProvider =
             new JcaDigestCalculatorProviderBuilder().build();
@@ -279,18 +280,30 @@ public class PadesSignatureEmbedder {
  *
  * This ContentSigner implementation returns a signature that was
  * pre-computed by the CSC service, rather than computing it locally.
+ * The CMS algorithm identifier is derived from the signer certificate's
+ * public key type (RSA → SHA256withRSA, EC → SHA256withECDSA).
  */
 class PrecomputedContentSigner implements ContentSigner {
     private final byte[] signature;
     private final AlgorithmIdentifier algorithmIdentifier;
     private ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-    public PrecomputedContentSigner(byte[] signature) {
+    public PrecomputedContentSigner(byte[] signature, X509Certificate signerCert) {
         this.signature = signature;
-        // SHA256withRSA algorithm identifier
-        this.algorithmIdentifier = new AlgorithmIdentifier(
-            new ASN1ObjectIdentifier("1.2.840.113549.1.1.11") // SHA256withRSA
-        );
+        this.algorithmIdentifier = deriveAlgorithmIdentifier(signerCert);
+    }
+
+    private static AlgorithmIdentifier deriveAlgorithmIdentifier(X509Certificate cert) {
+        String keyAlg = cert.getPublicKey().getAlgorithm();
+        return switch (keyAlg) {
+            case "RSA" -> new AlgorithmIdentifier(
+                new ASN1ObjectIdentifier("1.2.840.113549.1.1.11") // SHA256withRSA
+            );
+            case "EC" -> new AlgorithmIdentifier(
+                new ASN1ObjectIdentifier("1.2.840.10045.4.3.2") // SHA256withECDSA
+            );
+            default -> throw new SigningException("Unsupported signing key algorithm: " + keyAlg);
+        };
     }
 
     @Override

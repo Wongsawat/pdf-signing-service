@@ -293,18 +293,53 @@ class PadesSignatureEmbedderTest {
     class PrecomputedContentSignerTests {
 
         @Test
-        @DisplayName("Should create signer with SHA256withRSA algorithm identifier")
-        void shouldCreateSignerWithAlgorithmIdentifier() {
+        @DisplayName("Should derive SHA256withRSA algorithm identifier from RSA certificate")
+        void shouldCreateSignerWithRsaAlgorithmIdentifier() throws Exception {
             // Given
             byte[] signature = new byte[256];
+            KeyPair keyPair = generateKeyPair();
+            X509Certificate rsaCert = generateSelfSignedCertificate(keyPair);
 
-            // When - using reflection to access package-private constructor
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            // When
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, rsaCert);
 
-            // Then - verify algorithm identifier is SHA256withRSA (1.2.840.113549.1.1.11)
+            // Then - RSA cert → SHA256withRSA OID (1.2.840.113549.1.1.11)
             assertThat(signer.getAlgorithmIdentifier()).isNotNull();
             assertThat(signer.getAlgorithmIdentifier().getAlgorithm().getId())
                 .isEqualTo("1.2.840.113549.1.1.11");
+        }
+
+        @Test
+        @DisplayName("Should derive SHA256withECDSA algorithm identifier from EC certificate")
+        void shouldCreateSignerWithEcdsaAlgorithmIdentifier() throws Exception {
+            // Given
+            byte[] signature = new byte[72]; // typical ECDSA signature length
+            KeyPair ecKeyPair = generateEcKeyPair();
+            X509Certificate ecCert = generateEcSelfSignedCertificate(ecKeyPair);
+
+            // When
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, ecCert);
+
+            // Then - EC cert → SHA256withECDSA OID (1.2.840.10045.4.3.2)
+            assertThat(signer.getAlgorithmIdentifier()).isNotNull();
+            assertThat(signer.getAlgorithmIdentifier().getAlgorithm().getId())
+                .isEqualTo("1.2.840.10045.4.3.2");
+        }
+
+        @Test
+        @DisplayName("Should throw SigningException for unsupported key algorithm")
+        void shouldThrowForUnsupportedKeyAlgorithm() {
+            // Given
+            byte[] signature = new byte[256];
+            X509Certificate mockCert = mock(X509Certificate.class);
+            java.security.PublicKey mockKey = mock(java.security.PublicKey.class);
+            when(mockCert.getPublicKey()).thenReturn(mockKey);
+            when(mockKey.getAlgorithm()).thenReturn("DSA"); // unsupported
+
+            // When/Then
+            assertThatThrownBy(() -> createPrecomputedContentSigner(signature, mockCert))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.SigningException.class)
+                .hasMessageContaining("Unsupported signing key algorithm: DSA");
         }
 
         @Test
@@ -314,7 +349,7 @@ class PadesSignatureEmbedderTest {
             byte[] signature = new byte[]{1, 2, 3, 4, 5};
 
             // When
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, mockRsaCertificate());
             byte[] result = signer.getSignature();
 
             // Then
@@ -328,7 +363,7 @@ class PadesSignatureEmbedderTest {
             byte[] signature = new byte[256];
 
             // When
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, mockRsaCertificate());
             java.io.OutputStream outputStream = signer.getOutputStream();
 
             // Then
@@ -341,7 +376,7 @@ class PadesSignatureEmbedderTest {
         void shouldSupportWritingToOutputStream() throws Exception {
             // Given
             byte[] signature = new byte[256];
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature);
+            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, mockRsaCertificate());
             java.io.OutputStream outputStream = signer.getOutputStream();
 
             // When
@@ -426,16 +461,63 @@ class PadesSignatureEmbedderTest {
 
     /**
      * Creates a PrecomputedContentSigner instance via reflection.
+     * The certificate is used to derive the CMS algorithm identifier.
      */
-    private PrecomputedContentSigner createPrecomputedContentSigner(byte[] signature) {
+    private PrecomputedContentSigner createPrecomputedContentSigner(byte[] signature, X509Certificate cert) {
         try {
             java.lang.reflect.Constructor<PrecomputedContentSigner> constructor =
-                PrecomputedContentSigner.class.getDeclaredConstructor(byte[].class);
+                PrecomputedContentSigner.class.getDeclaredConstructor(byte[].class, X509Certificate.class);
             constructor.setAccessible(true);
-            return constructor.newInstance(signature);
+            return constructor.newInstance(signature, cert);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            // Unwrap to expose SigningException thrown by deriveAlgorithmIdentifier
+            if (e.getCause() instanceof RuntimeException re) throw re;
+            throw new RuntimeException("Failed to create PrecomputedContentSigner", e);
         } catch (Exception e) {
             throw new RuntimeException("Failed to create PrecomputedContentSigner", e);
         }
+    }
+
+    /**
+     * Creates a lightweight mock RSA certificate for tests that don't exercise algorithm detection.
+     */
+    private X509Certificate mockRsaCertificate() {
+        X509Certificate mockCert = mock(X509Certificate.class);
+        java.security.PublicKey mockKey = mock(java.security.PublicKey.class);
+        when(mockCert.getPublicKey()).thenReturn(mockKey);
+        when(mockKey.getAlgorithm()).thenReturn("RSA");
+        return mockCert;
+    }
+
+    /**
+     * Generates an EC key pair for ECDSA algorithm detection tests.
+     */
+    private KeyPair generateEcKeyPair() throws Exception {
+        java.security.KeyPairGenerator keyGen = java.security.KeyPairGenerator.getInstance("EC");
+        keyGen.initialize(256);
+        return keyGen.generateKeyPair();
+    }
+
+    /**
+     * Generates a minimal self-signed EC certificate for testing.
+     */
+    private X509Certificate generateEcSelfSignedCertificate(KeyPair keyPair) throws Exception {
+        org.bouncycastle.x509.X509V3CertificateGenerator certGen =
+            new org.bouncycastle.x509.X509V3CertificateGenerator();
+
+        certGen.setSerialNumber(java.math.BigInteger.valueOf(2));
+        certGen.setIssuerDN(new javax.security.auth.x500.X500Principal("CN=TestEC"));
+        certGen.setSubjectDN(new javax.security.auth.x500.X500Principal("CN=TestEC"));
+        certGen.setNotBefore(new Date(System.currentTimeMillis() - 86400000L));
+        certGen.setNotAfter(new Date(System.currentTimeMillis() + 86400000L));
+        certGen.setPublicKey(keyPair.getPublic());
+        certGen.setSignatureAlgorithm("SHA256WithECDSA");
+
+        if (java.security.Security.getProvider("BC") == null) {
+            java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        }
+
+        return certGen.generate(keyPair.getPrivate());
     }
 
     /**
