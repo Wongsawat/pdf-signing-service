@@ -50,6 +50,9 @@ public class CscSigningAdapter implements SigningPort {
     private final SadTokenValidator sadTokenValidator;
     private final CscProperties cscProperties;
 
+    /** Number of signatures requested per CSC authorize call. */
+    private static final int NUM_SIGNATURES = 1;
+
     @Override
     public SigningResult signPdfWithCertChain(byte[] pdfBytes, byte[] digest, PadesLevel padesLevel) {
         log.debug("Starting CSC signing process with PAdES level: {}", padesLevel);
@@ -65,7 +68,7 @@ public class CscSigningAdapter implements SigningPort {
                 CSCAuthorizeRequest.builder()
                     .clientId(cscProperties.getClientId())
                     .credentialID(cscProperties.getCredentialId())
-                    .numSignatures("1")
+                    .numSignatures(String.valueOf(NUM_SIGNATURES))
                     .hashAlgo(cscProperties.getHashAlgo())
                     .hash(new String[]{base64urlDigest})
                     .build()
