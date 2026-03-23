@@ -46,7 +46,7 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
 
     @Override
     public byte[] downloadPdf(String url) {
-        log.debug("Downloading PDF from URL: {}", url);
+        log.debug("Downloading PDF from URL: {}", redact(url));
 
         try {
             URL downloadUrl = new URL(url);
@@ -60,7 +60,7 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
 
                 int responseCode = connection.getResponseCode();
                 if (responseCode != HttpURLConnection.HTTP_OK) {
-                    throw new SigningException("Failed to download PDF: HTTP " + responseCode + " from " + url);
+                    throw new SigningException("Failed to download PDF: HTTP " + responseCode + " from " + redact(url));
                 }
 
                 int contentLength = connection.getContentLength();
@@ -73,21 +73,31 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
                     byte[] pdfBytes = inputStream.readAllBytes();
 
                     if (pdfBytes.length == 0) {
-                        throw new SigningException("Received empty PDF from URL: " + url);
+                        throw new SigningException("Received empty PDF from URL: " + redact(url));
                     }
 
                     // PDF validation - check for %PDF- header (5 bytes minimum)
-                    validatePdfHeader(pdfBytes, url);
+                    validatePdfHeader(pdfBytes, redact(url));
 
-                    log.debug("Downloaded PDF: {} bytes from {}", pdfBytes.length, url);
+                    log.debug("Downloaded PDF: {} bytes from {}", pdfBytes.length, redact(url));
                     return pdfBytes;
                 }
             } finally {
                 connection.disconnect();
             }
         } catch (IOException e) {
-            throw new SigningException("Failed to download PDF from URL: " + url, e);
+            throw new SigningException("Failed to download PDF from URL: " + redact(url), e);
         }
+    }
+
+    /**
+     * Returns the URL with any query parameters stripped.
+     * Presigned URLs contain HMAC credentials in query params — never include
+     * those in logs or exception messages.
+     */
+    private String redact(String url) {
+        int q = url.indexOf('?');
+        return q >= 0 ? url.substring(0, q) : url;
     }
 
     /**
