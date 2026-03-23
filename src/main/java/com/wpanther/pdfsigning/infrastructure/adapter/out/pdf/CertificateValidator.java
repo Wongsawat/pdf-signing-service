@@ -37,8 +37,9 @@ public class CertificateValidator {
 
     /**
      * Default constructor for testing.
+     * Package-private to prevent accidental use in production.
      */
-    public CertificateValidator() {
+    CertificateValidator() {
         this.cscProperties = null;  // Will use testValidationEnabled
     }
 
