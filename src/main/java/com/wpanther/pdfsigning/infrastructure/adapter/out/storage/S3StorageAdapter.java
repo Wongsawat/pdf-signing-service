@@ -39,8 +39,8 @@ import java.time.LocalDate;
 public class S3StorageAdapter implements DocumentStoragePort {
 
     private final StorageProperties storageProperties;
-    private volatile S3Client s3Client;
-    private volatile S3Presigner s3Presigner;
+    private S3Client s3Client;
+    private S3Presigner s3Presigner;
 
     /**
      * Constructor for Spring-managed bean.
@@ -52,16 +52,10 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     /**
      * Initializes the S3 client and presigner from configuration.
-     * Called by Spring after constructor and property injection.
-     * This method is synchronized to ensure thread-safe initialization.
+     * Called once by the Spring container after property injection.
      */
     @PostConstruct
-    public synchronized void init() {
-        // Double-check initialization idempotency
-        if (this.s3Client != null) {
-            return;
-        }
-
+    public void init() {
         StorageProperties.S3 s3 = storageProperties.getS3();
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(
