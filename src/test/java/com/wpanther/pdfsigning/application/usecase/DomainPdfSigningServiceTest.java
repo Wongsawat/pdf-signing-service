@@ -58,10 +58,13 @@ class DomainPdfSigningServiceTest {
     @Mock
     private SignedPdfDocumentRepository mockRepository;
 
+    @Mock
+    private X509Certificate mockCert;
+
     private DomainPdfSigningService service;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws java.security.cert.CertificateEncodingException {
         service = new DomainPdfSigningService(
             mockSigningPort,
             mockPdfPort,
@@ -69,6 +72,13 @@ class DomainPdfSigningServiceTest {
             mockDownloadPort,
             mockRepository
         );
+        // Provide a minimal DER-encoded certificate for tests that complete successfully
+        when(mockCert.getEncoded()).thenReturn(new byte[]{48, 3, 1, 2, 3});
+    }
+
+    /** Convenience: one-element chain containing the shared mock certificate. */
+    private X509Certificate[] oneCert() {
+        return new X509Certificate[]{mockCert};
     }
 
     @Nested
@@ -87,12 +97,11 @@ class DomainPdfSigningServiceTest {
             byte[] digest = new byte[32]; // SHA-256 digest
             byte[] signedPdfBytes = "signed pdf content".getBytes();
             String storageUrl = "https://storage.example.com/documents/signed.pdf";
-            X509Certificate[] certChain = new X509Certificate[0];
 
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert()));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -231,12 +240,11 @@ class DomainPdfSigningServiceTest {
             byte[] digest = new byte[32];
             byte[] signedPdfBytes = "signed pdf content".getBytes();
             String storageUrl = "https://storage.example.com/signed.pdf";
-            X509Certificate[] certChain = new X509Certificate[0];
 
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert()));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -262,12 +270,11 @@ class DomainPdfSigningServiceTest {
             byte[] digest = new byte[32];
             byte[] signedPdfBytes = "signed pdf content".getBytes();
             String storageUrl = "https://storage.example.com/documents/2024/02/27/signed-pdf-abc123.pdf";
-            X509Certificate[] certChain = new X509Certificate[0];
 
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert()));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -281,8 +288,8 @@ class DomainPdfSigningServiceTest {
         }
 
         @Test
-        @DisplayName("Should handle certificate encoding exception gracefully")
-        void shouldHandleCertificateEncodingException() {
+        @DisplayName("Should throw SigningException when CSC returns empty certificate chain")
+        void shouldThrowWhenCertChainIsEmpty() {
             // Given
             String originalPdfUrl = "https://storage.example.com/original.pdf";
             String documentId = "doc-123";
@@ -293,23 +300,47 @@ class DomainPdfSigningServiceTest {
             byte[] signedPdfBytes = "signed pdf content".getBytes();
             String storageUrl = "https://storage.example.com/signed.pdf";
 
-            // Create a mock certificate chain that throws on getEncoded()
-            X509Certificate[] certChain = new X509Certificate[0];
+            when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
+            when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
+            when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, new X509Certificate[0]));
+            when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
+                .thenReturn(storageUrl);
+
+            // When/Then — empty chain must never silently produce a garbage certificate
+            assertThatThrownBy(() -> service.signPdf(originalPdfUrl, documentId, padesLevel))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("empty certificate chain");
+        }
+
+        @Test
+        @DisplayName("Should throw SigningException when certificate encoding fails")
+        void shouldThrowOnCertificateEncodingException() throws java.security.cert.CertificateEncodingException {
+            // Given
+            String originalPdfUrl = "https://storage.example.com/original.pdf";
+            String documentId = "doc-123";
+            PadesLevel padesLevel = PadesLevel.BASELINE_B;
+
+            byte[] pdfBytes = "test pdf content".getBytes();
+            byte[] digest = new byte[32];
+            byte[] signedPdfBytes = "signed pdf content".getBytes();
+            String storageUrl = "https://storage.example.com/signed.pdf";
+
+            X509Certificate badCert = mock(X509Certificate.class);
+            when(badCert.getEncoded())
+                .thenThrow(new java.security.cert.CertificateEncodingException("encoding failed"));
 
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, new X509Certificate[]{badCert}));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
-            // When
-            DomainPdfSigningService.SignedPdfResult result = service.signPdf(
-                originalPdfUrl, documentId, padesLevel
-            );
-
-            // Then - should use placeholder for empty cert chain
-            assertThat(result.certificate()).contains("PLACEHOLDER");
+            // When/Then
+            assertThatThrownBy(() -> service.signPdf(originalPdfUrl, documentId, padesLevel))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("Failed to encode certificate chain");
         }
     }
 

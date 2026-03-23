@@ -178,21 +178,14 @@ public class DomainPdfSigningService {
      * Converts X509Certificate[] to PEM format using Base64 encoding.
      * Includes all certificates in the chain.
      * </p>
-     * <p>
-     * Note: Returns a placeholder for null/empty certificate chains to support
-     * test scenarios. In production, the CSC API always returns a valid certificate chain.
-     * Encoding failures throw SigningException as they indicate real errors.
-     * </p>
      *
      * @param certChain Certificate chain from signing result
      * @return PEM-encoded certificate string
-     * @throws SigningException if certificate encoding fails
+     * @throws SigningException if the chain is empty or certificate encoding fails
      */
     private String extractCertificatePem(X509Certificate[] certChain) {
-        // Handle empty or null certificate chain (used in test scenarios)
         if (certChain == null || certChain.length == 0) {
-            log.warn("Certificate chain is null or empty, using placeholder - this should not happen in production");
-            return "-----BEGIN CERTIFICATE-----\nPLACEHOLDER\n-----END CERTIFICATE-----\n";
+            throw new SigningException("CSC API returned empty certificate chain");
         }
 
         try {
