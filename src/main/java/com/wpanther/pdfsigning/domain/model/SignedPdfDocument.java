@@ -19,12 +19,15 @@ import java.time.LocalDateTime;
  * - State transitions must follow the state machine
  * - Cannot sign a document that's already signed
  * - Cannot complete without signing first
- * - Tracks retry attempts for resilience
+ * - Tracks retry attempts up to {@link #MAX_RETRY_ATTEMPTS}
  */
 @Getter
 @Builder(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PUBLIC) // Public for MapStruct
 public class SignedPdfDocument {
+
+    /** Maximum number of signing retry attempts before the document is permanently failed. */
+    public static final int MAX_RETRY_ATTEMPTS = 3;
 
     private final SignedPdfDocumentId id;
     private final String invoiceId;
@@ -199,12 +202,23 @@ public class SignedPdfDocument {
 
     /**
      * Checks if this document can be retried.
+     * Returns true only when the document is FAILED and has not yet reached {@link #MAX_RETRY_ATTEMPTS}.
      *
-     * @param maxRetries maximum retry attempts
-     * @return true if can retry, false otherwise
+     * @return true if status is FAILED and retry count is below the maximum
      */
-    public boolean canRetry(int maxRetries) {
-        return status == SigningStatus.FAILED && retryCount < maxRetries;
+    public boolean canRetry() {
+        return status == SigningStatus.FAILED && retryCount < MAX_RETRY_ATTEMPTS;
+    }
+
+    /**
+     * Checks if this document has exhausted all retry attempts.
+     * Retry count is incremented by the caller before this check;
+     * returns true when the count meets or exceeds {@link #MAX_RETRY_ATTEMPTS}.
+     *
+     * @return true if retry count has reached the maximum
+     */
+    public boolean hasExhaustedRetries() {
+        return retryCount >= MAX_RETRY_ATTEMPTS;
     }
 
     /**

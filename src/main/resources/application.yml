@@ -112,10 +112,6 @@ app:
     # Conformance level: BASELINE_B, BASELINE_T, BASELINE_LT, BASELINE_LTA
     level: ${PADES_LEVEL:BASELINE_B}
 
-  signing:
-    max-retries: ${SIGNING_MAX_RETRIES:3}
-    retry-delay-seconds: ${SIGNING_RETRY_DELAY:5}
-
   storage:
     provider: ${STORAGE_PROVIDER:local}
     local:

@@ -332,7 +332,7 @@ class SignedPdfDocumentTest {
             document.incrementRetryCount();
 
             // When/Then
-            assertThat(document.canRetry(3)).isTrue();
+            assertThat(document.canRetry()).isTrue();
         }
 
         @Test
@@ -346,7 +346,7 @@ class SignedPdfDocumentTest {
             document.incrementRetryCount();
 
             // When/Then
-            assertThat(document.canRetry(3)).isFalse();
+            assertThat(document.canRetry()).isFalse();
         }
 
         @Test
@@ -356,7 +356,48 @@ class SignedPdfDocumentTest {
             SignedPdfDocument document = createTestDocument();
 
             // When/Then
-            assertThat(document.canRetry(3)).isFalse();
+            assertThat(document.canRetry()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("hasExhaustedRetries() method")
+    class HasExhaustedRetriesMethod {
+
+        @Test
+        @DisplayName("Should return false when retry count is below max")
+        void shouldReturnFalseWhenBelowMax() {
+            // Given
+            SignedPdfDocument document = createTestDocument();
+            document.markFailed("Error");
+            document.incrementRetryCount(); // retryCount = 1
+
+            // When/Then
+            assertThat(document.hasExhaustedRetries()).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should return true when retry count reaches MAX_RETRY_ATTEMPTS")
+        void shouldReturnTrueWhenAtMax() {
+            // Given
+            SignedPdfDocument document = createTestDocument();
+            document.markFailed("Error");
+            for (int i = 0; i < SignedPdfDocument.MAX_RETRY_ATTEMPTS; i++) {
+                document.incrementRetryCount();
+            }
+
+            // When/Then
+            assertThat(document.hasExhaustedRetries()).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should return false for a fresh document with no retries")
+        void shouldReturnFalseForFreshDocument() {
+            // Given
+            SignedPdfDocument document = createTestDocument();
+
+            // When/Then
+            assertThat(document.hasExhaustedRetries()).isFalse();
         }
     }
 

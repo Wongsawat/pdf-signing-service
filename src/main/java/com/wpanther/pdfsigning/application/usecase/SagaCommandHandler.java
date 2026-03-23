@@ -6,7 +6,6 @@ import com.wpanther.pdfsigning.application.port.out.PdfSignedEventPort;
 import com.wpanther.pdfsigning.application.port.out.PdfSagaReplyPort;
 import com.wpanther.pdfsigning.domain.model.*;
 import com.wpanther.pdfsigning.domain.repository.SignedPdfDocumentRepository;
-import com.wpanther.pdfsigning.infrastructure.config.properties.SigningProperties;
 import com.wpanther.pdfsigning.infrastructure.config.properties.PadesProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +40,6 @@ public class SagaCommandHandler implements SagaCommandPort {
     private final DomainPdfSigningService domainPdfSigningService;
     private final PdfSagaReplyPort sagaReplyPort;
     private final PdfSignedEventPort pdfSignedEventPort;
-    private final SigningProperties signingProperties;
     private final PadesProperties padesProperties;
 
     /**
@@ -82,7 +80,7 @@ public class SagaCommandHandler implements SagaCommandPort {
         }
 
         // 3. Max retries exceeded — publish failure and return (OUTSIDE the signing try/catch)
-        if (existing.isPresent() && existing.get().getRetryCount() >= signingProperties.getMaxRetries()) {
+        if (existing.isPresent() && existing.get().hasExhaustedRetries()) {
             log.warn("Max retries exceeded for documentId={}, sending FAILURE reply", command.getDocumentId());
             sagaReplyPort.publishFailure(
                 command.getSagaId(),
