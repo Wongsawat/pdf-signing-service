@@ -6,6 +6,9 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
@@ -54,5 +57,19 @@ public interface SignedPdfDocumentMapper {
      */
     default SignedPdfDocumentId map(UUID uuid) {
         return uuid != null ? SignedPdfDocumentId.of(uuid) : null;
+    }
+
+    /**
+     * Maps Instant (domain) to OffsetDateTime (entity / TIMESTAMPTZ column).
+     */
+    default OffsetDateTime map(Instant instant) {
+        return instant != null ? instant.atOffset(ZoneOffset.UTC) : null;
+    }
+
+    /**
+     * Maps OffsetDateTime (entity) back to Instant (domain).
+     */
+    default Instant map(OffsetDateTime offsetDateTime) {
+        return offsetDateTime != null ? offsetDateTime.toInstant() : null;
     }
 }

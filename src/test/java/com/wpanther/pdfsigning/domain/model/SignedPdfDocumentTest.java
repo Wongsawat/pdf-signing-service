@@ -154,7 +154,7 @@ class SignedPdfDocumentTest {
                 "txn-123",
                 "-----BEGIN CERTIFICATE-----",
                 "PAdES-BASELINE-T",
-                LocalDateTime.now()
+                java.time.Instant.now()
             );
 
             // Then
@@ -179,7 +179,7 @@ class SignedPdfDocumentTest {
             // When/Then
             assertThatThrownBy(() -> document.markCompleted(
                 "/path/signed.pdf", "http://example.com/signed.pdf", 2048L,
-                "txn-123", "cert", "PAdES", LocalDateTime.now()
+                "txn-123", "cert", "PAdES", java.time.Instant.now()
             ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Cannot complete")
@@ -196,7 +196,7 @@ class SignedPdfDocumentTest {
             // When/Then
             assertThatThrownBy(() -> document.markCompleted(
                 "", "http://example.com/signed.pdf", 2048L,
-                "txn-123", "cert", "PAdES", LocalDateTime.now()
+                "txn-123", "cert", "PAdES", java.time.Instant.now()
             ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("signedPdfPath");
@@ -212,7 +212,7 @@ class SignedPdfDocumentTest {
             // When/Then
             assertThatThrownBy(() -> document.markCompleted(
                 "/path/signed.pdf", null, 2048L,
-                "txn-123", "cert", "PAdES", LocalDateTime.now()
+                "txn-123", "cert", "PAdES", java.time.Instant.now()
             ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("signedPdfUrl");
@@ -425,7 +425,7 @@ class SignedPdfDocumentTest {
             "txn-123",
             "-----BEGIN CERTIFICATE-----",
             "PAdES-BASELINE-T",
-            LocalDateTime.now()
+            java.time.Instant.now()
         );
     }
 }

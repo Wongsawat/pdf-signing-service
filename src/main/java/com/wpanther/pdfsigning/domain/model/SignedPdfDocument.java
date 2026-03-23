@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
@@ -38,7 +39,7 @@ public class SignedPdfDocument {
     private String transactionId;
     private String certificate;
     private String signatureLevel;
-    private LocalDateTime signatureTimestamp;
+    private Instant signatureTimestamp;
 
     private SigningStatus status;
     private String errorMessage;
@@ -125,7 +126,7 @@ public class SignedPdfDocument {
             String transactionId,
             String certificate,
             String signatureLevel,
-            LocalDateTime signatureTimestamp) {
+            Instant signatureTimestamp) {
 
         if (status != SigningStatus.SIGNING) {
             throw new IllegalStateException(

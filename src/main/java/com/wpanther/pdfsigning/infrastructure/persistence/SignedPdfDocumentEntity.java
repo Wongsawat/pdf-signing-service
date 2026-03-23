@@ -15,6 +15,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -67,8 +68,8 @@ public class SignedPdfDocumentEntity {
     @Column(name = "signature_level", length = 50)
     private String signatureLevel;
 
-    @Column(name = "signature_timestamp")
-    private LocalDateTime signatureTimestamp;
+    @Column(name = "signature_timestamp", columnDefinition = "TIMESTAMPTZ")
+    private OffsetDateTime signatureTimestamp;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

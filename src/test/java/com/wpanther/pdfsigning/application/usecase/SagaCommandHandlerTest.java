@@ -151,7 +151,7 @@ class SagaCommandHandlerTest {
             "txn-abc",
             "PEM-CERT",
             "PAdES-BASELINE-B",
-            java.time.LocalDateTime.now()
+            java.time.Instant.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(completedDocument));
@@ -199,7 +199,7 @@ class SagaCommandHandlerTest {
             "txn-abc",
             "PEM-CERT",
             "PAdES-BASELINE-B",
-            java.time.LocalDateTime.now()
+            java.time.Instant.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(document));
@@ -263,7 +263,7 @@ class SagaCommandHandlerTest {
             "txn-abc",
             "PEM-CERT",
             "PAdES-BASELINE-B",
-            java.time.LocalDateTime.now()
+            java.time.Instant.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(completedDocument));
@@ -413,7 +413,7 @@ class SagaCommandHandlerTest {
             "txn-abc",
             "PEM-CERT",
             "PAdES-BASELINE-B",
-            java.time.LocalDateTime.now()
+            java.time.Instant.now()
         );
 
         when(documentRepository.findByInvoiceId("doc-789")).thenReturn(Optional.of(document));

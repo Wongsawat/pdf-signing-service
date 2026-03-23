@@ -134,7 +134,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                 result.transactionId(),
                 result.certificate(),
                 result.signatureLevel(),
-                result.signatureTimestamp().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+                result.signatureTimestamp()
             );
             documentRepository.save(document);
 
@@ -281,8 +281,7 @@ public class SagaCommandHandler implements SagaCommandPort {
      * Sends SUCCESS reply for an already completed document (idempotent).
      */
     private void sendSuccessReply(ProcessPdfSigningCommand command, SignedPdfDocument document) {
-        Instant timestamp = document.getSignatureTimestamp()
-            .atZone(java.time.ZoneId.systemDefault()).toInstant();
+        Instant timestamp = document.getSignatureTimestamp();
         sagaReplyPort.publishSuccess(
             command.getSagaId(),
             command.getSagaStep(),
