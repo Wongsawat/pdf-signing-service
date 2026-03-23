@@ -48,39 +48,45 @@ public class PadesCmsBuilder {
      * @param certChain    Certificate chain from CSC response
      * @param digest       The PDF byte range digest that was signed
      * @return Encoded CMS/PKCS#7 signature bytes
-     * @throws Exception if CMS construction fails
+     * @throws SigningException if CMS construction fails
      */
     public byte[] buildCmsSignature(byte[] rawSignature,
                                     X509Certificate[] certChain,
-                                    byte[] digest) throws Exception {
+                                    byte[] digest) throws SigningException {
 
-        CMSSignedDataGenerator generator = new CMSSignedDataGenerator();
+        try {
+            CMSSignedDataGenerator generator = new CMSSignedDataGenerator();
 
-        Store certStore = new JcaCertStore(Arrays.asList(certChain));
-        generator.addCertificates(certStore);
+            Store certStore = new JcaCertStore(Arrays.asList(certChain));
+            generator.addCertificates(certStore);
 
-        ContentSigner signer = new PrecomputedContentSigner(rawSignature, certChain[0]);
+            ContentSigner signer = new PrecomputedContentSigner(rawSignature, certChain[0]);
 
-        DigestCalculatorProvider digestProvider =
-            new JcaDigestCalculatorProviderBuilder().build();
+            DigestCalculatorProvider digestProvider =
+                new JcaDigestCalculatorProviderBuilder().build();
 
-        SignerInfoGeneratorBuilder signerBuilder =
-            new SignerInfoGeneratorBuilder(digestProvider);
+            SignerInfoGeneratorBuilder signerBuilder =
+                new SignerInfoGeneratorBuilder(digestProvider);
 
-        signerBuilder.setSignedAttributeGenerator(
-            new PadesSignedAttributesGenerator(certChain[0], digest)
-        );
+            signerBuilder.setSignedAttributeGenerator(
+                new PadesSignedAttributesGenerator(certChain[0], digest)
+            );
 
-        generator.addSignerInfoGenerator(
-            signerBuilder.build(signer, new X509CertificateHolder(
-                certChain[0].getEncoded()))
-        );
+            generator.addSignerInfoGenerator(
+                signerBuilder.build(signer, new X509CertificateHolder(
+                    certChain[0].getEncoded()))
+            );
 
-        CMSSignedData cms = generator.generate(
-            new CMSProcessableByteArray(digest), false
-        );
+            CMSSignedData cms = generator.generate(
+                new CMSProcessableByteArray(digest), false
+            );
 
-        return cms.getEncoded();
+            return cms.getEncoded();
+        } catch (SigningException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SigningException("Failed to build CMS signature: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -177,14 +183,16 @@ public class PadesCmsBuilder {
                     buildSigningCertificateV2()
                 );
 
+            } catch (SigningException e) {
+                throw e;
             } catch (Exception e) {
-                throw new RuntimeException("Failed to build PAdES signed attributes", e);
+                throw new SigningException("Failed to build PAdES signed attributes", e);
             }
 
             return new AttributeTable(attributes);
         }
 
-        private ASN1Sequence buildSigningCertificateV2() throws Exception {
+        private ASN1Sequence buildSigningCertificateV2() throws SigningException {
             byte[] certDigest = computeCertificateDigest(certificate);
 
             ASN1EncodableVector certIdVector = new ASN1EncodableVector();
@@ -196,12 +204,12 @@ public class PadesCmsBuilder {
             return new DERSequence(new DERSequence(certIdVector));
         }
 
-        private byte[] computeCertificateDigest(X509Certificate cert) {
+        private byte[] computeCertificateDigest(X509Certificate cert) throws SigningException {
             try {
                 MessageDigest md = MessageDigest.getInstance("SHA-256");
                 return md.digest(cert.getEncoded());
             } catch (Exception e) {
-                throw new RuntimeException("Failed to compute certificate digest", e);
+                throw new SigningException("Failed to compute certificate digest", e);
             }
         }
     }

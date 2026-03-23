@@ -182,7 +182,7 @@ class PadesCmsBuilderTest {
         }
 
         @Test
-        @DisplayName("Should throw exception when certificate encoding fails")
+        @DisplayName("Should throw SigningException when certificate encoding fails")
         void shouldThrowForCertificateEncodingFailure() throws Exception {
             X509Certificate mockCert = mock(X509Certificate.class);
             when(mockCert.getEncoded()).thenThrow(new java.security.cert.CertificateEncodingException("Test error"));
@@ -190,8 +190,8 @@ class PadesCmsBuilderTest {
                 createPadesSignedAttributesGenerator(mockCert, new byte[32]);
 
             assertThatThrownBy(() -> generator.getAttributes(Collections.emptyMap()))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Failed to build PAdES signed attributes");
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.SigningException.class)
+                .hasMessageContaining("Failed to compute certificate digest");
         }
     }
 
