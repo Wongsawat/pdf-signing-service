@@ -13,7 +13,8 @@ import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureRe
 import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateParser;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateValidator;
-import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesSignatureEmbedder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesCmsBuilder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesEmbedder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -41,7 +42,8 @@ public class CscSigningAdapter implements SigningPort {
 
     private final CSCAuthClient authClient;
     private final CSCApiClient apiClient;
-    private final PadesSignatureEmbedder signatureEmbedder;
+    private final PadesCmsBuilder cmsBuilder;
+    private final PadesEmbedder pdfEmbedder;
     private final CertificateParser certificateParser;
     private final CertificateValidator certificateValidator;
     private final SadTokenValidator sadTokenValidator;
@@ -99,7 +101,7 @@ public class CscSigningAdapter implements SigningPort {
             // Step 6: Build CMS/PKCS#7 signature
             log.debug("Building CMS/PKCS#7 signature");
             byte[] rawSignature = Base64.getDecoder().decode(signResponse.getSignatures()[0]);
-            byte[] cmsSignature = signatureEmbedder.buildCmsSignature(
+            byte[] cmsSignature = cmsBuilder.buildCmsSignature(
                 rawSignature,
                 responseCertChain,
                 digest
@@ -108,7 +110,7 @@ public class CscSigningAdapter implements SigningPort {
 
             // Step 7: Embed signature into PDF
             log.debug("Embedding signature into PDF");
-            byte[] signedPdf = signatureEmbedder.embedSignature(pdfBytes, cmsSignature);
+            byte[] signedPdf = pdfEmbedder.embedSignature(pdfBytes, cmsSignature);
             log.debug("Embedded signature, signed PDF size: {} bytes", signedPdf.length);
 
             // Return both signed PDF and certificate chain

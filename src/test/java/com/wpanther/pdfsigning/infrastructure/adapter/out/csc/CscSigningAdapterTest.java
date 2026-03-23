@@ -12,7 +12,8 @@ import com.wpanther.pdfsigning.infrastructure.adapter.out.csc.dto.CSCSignatureRe
 import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateParser;
 import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.CertificateValidator;
-import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesSignatureEmbedder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesCmsBuilder;
+import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesEmbedder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -46,7 +47,10 @@ class CscSigningAdapterTest {
     private CSCApiClient mockApiClient;
 
     @Mock
-    private PadesSignatureEmbedder mockSignatureEmbedder;
+    private PadesCmsBuilder mockCmsBuilder;
+
+    @Mock
+    private PadesEmbedder mockPdfEmbedder;
 
     @Mock
     private CertificateParser mockCertificateParser;
@@ -67,7 +71,8 @@ class CscSigningAdapterTest {
         adapter = new CscSigningAdapter(
             mockAuthClient,
             mockApiClient,
-            mockSignatureEmbedder,
+            mockCmsBuilder,
+            mockPdfEmbedder,
             mockCertificateParser,
             mockCertificateValidator,
             mockSadTokenValidator,
@@ -105,8 +110,8 @@ class CscSigningAdapterTest {
             when(mockAuthClient.authorize(any())).thenReturn(authResponse);
             when(mockApiClient.signHash(any())).thenReturn(signResponse);
             when(mockCertificateParser.parseCertificateChain(any())).thenReturn(certChain);
-            when(mockSignatureEmbedder.buildCmsSignature(any(), any(), any())).thenReturn(cmsSignature);
-            when(mockSignatureEmbedder.embedSignature(any(), any())).thenReturn(signedPdf);
+            when(mockCmsBuilder.buildCmsSignature(any(), any(), any())).thenReturn(cmsSignature);
+            when(mockPdfEmbedder.embedSignature(any(), any())).thenReturn(signedPdf);
 
             // When
             SigningPort.SigningResult result = adapter.signPdfWithCertChain(pdfBytes, digest, PadesLevel.BASELINE_B);
@@ -117,8 +122,8 @@ class CscSigningAdapterTest {
             verify(mockSadTokenValidator).validate(authResponse, "test-credential");
             verify(mockApiClient).signHash(any());
             verify(mockCertificateParser).parseCertificateChain(any());
-            verify(mockSignatureEmbedder).buildCmsSignature(any(), any(), any());
-            verify(mockSignatureEmbedder).embedSignature(pdfBytes, cmsSignature);
+            verify(mockCmsBuilder).buildCmsSignature(any(), any(), any());
+            verify(mockPdfEmbedder).embedSignature(pdfBytes, cmsSignature);
         }
 
         @Test

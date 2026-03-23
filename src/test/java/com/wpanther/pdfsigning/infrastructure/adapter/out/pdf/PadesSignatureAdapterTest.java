@@ -1,7 +1,6 @@
 package com.wpanther.pdfsigning.infrastructure.adapter.out.pdf;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
-import com.wpanther.pdfsigning.infrastructure.adapter.out.pdf.PadesSignatureEmbedder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,13 +15,12 @@ import java.io.InputStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link PadesSignatureAdapter}.
  * <p>
- * Tests the PDF adapter using mocked PadesSignatureEmbedder.
+ * Tests the PDF adapter using mocked {@link PadesDigestComputer} and {@link PadesEmbedder}.
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
@@ -30,13 +28,16 @@ import static org.mockito.Mockito.*;
 class PadesSignatureAdapterTest {
 
     @Mock
-    private PadesSignatureEmbedder mockSignatureEmbedder;
+    private PadesDigestComputer mockDigestComputer;
+
+    @Mock
+    private PadesEmbedder mockPdfEmbedder;
 
     private PadesSignatureAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new PadesSignatureAdapter(mockSignatureEmbedder);
+        adapter = new PadesSignatureAdapter(mockDigestComputer, mockPdfEmbedder);
     }
 
     @Nested
@@ -49,7 +50,7 @@ class PadesSignatureAdapterTest {
             // Given
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] expectedDigest = new byte[32];
-            when(mockSignatureEmbedder.computeByteRangeDigest(any(InputStream.class)))
+            when(mockDigestComputer.computeByteRangeDigest(any(InputStream.class)))
                 .thenReturn(expectedDigest);
 
             // When
@@ -57,15 +58,15 @@ class PadesSignatureAdapterTest {
 
             // Then
             assertThat(result).isEqualTo(expectedDigest);
-            verify(mockSignatureEmbedder).computeByteRangeDigest(any(InputStream.class));
+            verify(mockDigestComputer).computeByteRangeDigest(any(InputStream.class));
         }
 
         @Test
-        @DisplayName("Should propagate exceptions as SigningException")
+        @DisplayName("Should wrap IOException as SigningException")
         void shouldPropagateException() throws Exception {
             // Given
             byte[] pdfBytes = "test pdf content".getBytes();
-            when(mockSignatureEmbedder.computeByteRangeDigest(any(InputStream.class)))
+            when(mockDigestComputer.computeByteRangeDigest(any(InputStream.class)))
                 .thenThrow(new IOException("PDF read error"));
 
             // When/Then
@@ -86,7 +87,7 @@ class PadesSignatureAdapterTest {
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] cmsSignature = "cms signature".getBytes();
             byte[] signedPdf = "signed pdf content".getBytes();
-            when(mockSignatureEmbedder.embedSignature(pdfBytes, cmsSignature))
+            when(mockPdfEmbedder.embedSignature(pdfBytes, cmsSignature))
                 .thenReturn(signedPdf);
 
             // When
@@ -94,16 +95,16 @@ class PadesSignatureAdapterTest {
 
             // Then
             assertThat(result).isEqualTo(signedPdf);
-            verify(mockSignatureEmbedder).embedSignature(pdfBytes, cmsSignature);
+            verify(mockPdfEmbedder).embedSignature(pdfBytes, cmsSignature);
         }
 
         @Test
-        @DisplayName("Should propagate exceptions as SigningException")
+        @DisplayName("Should wrap IOException as SigningException")
         void shouldPropagateException() throws Exception {
             // Given
             byte[] pdfBytes = "test pdf content".getBytes();
             byte[] cmsSignature = "cms signature".getBytes();
-            when(mockSignatureEmbedder.embedSignature(pdfBytes, cmsSignature))
+            when(mockPdfEmbedder.embedSignature(pdfBytes, cmsSignature))
                 .thenThrow(new IOException("PDF write error"));
 
             // When/Then
