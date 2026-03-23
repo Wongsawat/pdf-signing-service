@@ -2,6 +2,8 @@ package com.wpanther.pdfsigning.infrastructure.adapter.out.download;
 
 import com.wpanther.pdfsigning.domain.model.SigningException;
 import com.wpanther.pdfsigning.application.port.out.DocumentDownloadPort;
+import com.wpanther.pdfsigning.infrastructure.config.properties.PadesProperties;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -10,7 +12,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 /**
  * HTTP-based adapter for downloading PDF documents.
@@ -20,12 +21,22 @@ import java.nio.charset.StandardCharsets;
  * </p>
  */
 @Component
+@RequiredArgsConstructor
 public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
 
     private static final Logger log = LoggerFactory.getLogger(HttpDocumentDownloadAdapter.class);
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int READ_TIMEOUT_MS = 30000;
-    private static final int MAX_PDF_SIZE = 100 * 1024 * 1024; // 100 MB
+
+    private final PadesProperties padesProperties;
+
+    /**
+     * Package-private constructor for test access.
+     * Uses default PadesProperties (maxSizeBytes = 5 MB).
+     */
+    HttpDocumentDownloadAdapter() {
+        this.padesProperties = new PadesProperties();
+    }
 
     /**
      * PDF file header bytes: %PDF-
@@ -53,8 +64,9 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
                 }
 
                 int contentLength = connection.getContentLength();
-                if (contentLength > 0 && contentLength > MAX_PDF_SIZE) {
-                    throw new SigningException("PDF too large: " + contentLength + " bytes (max: " + MAX_PDF_SIZE + ")");
+                long maxSizeBytes = padesProperties.getMaxSizeBytes();
+                if (contentLength > 0 && contentLength > maxSizeBytes) {
+                    throw new SigningException("PDF too large: " + contentLength + " bytes (max: " + maxSizeBytes + ")");
                 }
 
                 try (InputStream inputStream = connection.getInputStream()) {

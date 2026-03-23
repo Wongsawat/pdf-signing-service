@@ -130,7 +130,7 @@ app:
 
   # PDF size validation
   pdf:
-    max-size-bytes: ${PDF_MAX_SIZE_BYTES:104857600}  # 100MB default
+    max-size-bytes: ${PDF_MAX_SIZE_BYTES:5242880}  # 5 MB default
 
 # Saga-commons configuration (outbox pattern)
 saga:

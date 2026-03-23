@@ -36,4 +36,11 @@ public class PadesProperties {
      * </p>
      */
     private PadesLevel level = PadesLevel.BASELINE_B;
+
+    /**
+     * Maximum allowed size for downloaded PDFs in bytes.
+     * Protects the service from memory exhaustion when downloading large files.
+     * Default: 5 MB (5,242,880 bytes)
+     */
+    private long maxSizeBytes = 5 * 1024 * 1024;
 }
