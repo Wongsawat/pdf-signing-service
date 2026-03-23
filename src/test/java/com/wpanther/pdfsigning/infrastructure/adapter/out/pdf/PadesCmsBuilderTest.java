@@ -19,8 +19,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link PadesCmsBuilder} and its supporting classes
- * {@link PrecomputedContentSigner} and {@link PadesSignedAttributesGenerator}.
+ * Unit tests for {@link PadesCmsBuilder} and its nested classes
+ * {@link PadesCmsBuilder.PrecomputedContentSigner} and
+ * {@link PadesCmsBuilder.PadesSignedAttributesGenerator}.
  */
 @DisplayName("PadesCmsBuilder Tests")
 class PadesCmsBuilderTest {
@@ -39,10 +40,7 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should throw exception for null raw signature")
         void shouldThrowExceptionForNullRawSignature() {
-            // Given
             byte[] digest = new byte[32];
-
-            // When/Then
             assertThatThrownBy(() -> cmsBuilder.buildCmsSignature(null, createMockCertificateChain(), digest))
                 .isInstanceOf(Exception.class);
         }
@@ -50,11 +48,8 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should throw exception for empty certificate chain")
         void shouldThrowExceptionForEmptyCertChain() {
-            // Given
             byte[] rawSignature = new byte[256];
             byte[] digest = new byte[32];
-
-            // When/Then
             assertThatThrownBy(() -> cmsBuilder.buildCmsSignature(rawSignature, new X509Certificate[0], digest))
                 .isInstanceOf(Exception.class);
         }
@@ -62,10 +57,7 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should throw exception for null digest")
         void shouldThrowExceptionForNullDigest() {
-            // Given
             byte[] rawSignature = new byte[256];
-
-            // When/Then
             assertThatThrownBy(() -> cmsBuilder.buildCmsSignature(rawSignature, createMockCertificateChain(), null))
                 .isInstanceOf(Exception.class);
         }
@@ -73,33 +65,28 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should throw exception for mock certificates (invalid encoding)")
         void shouldThrowForMockCertificates() {
-            // Given - mock certificates don't work with JcaCertStore
             byte[] rawSignature = new byte[256];
             X509Certificate[] certChain = createMockCertificateChain();
             byte[] digest = new byte[32];
-
-            // When/Then
             assertThatThrownBy(() -> cmsBuilder.buildCmsSignature(rawSignature, certChain, digest))
                 .isInstanceOf(Exception.class);
         }
     }
 
     @Nested
-    @DisplayName("PrecomputedContentSigner")
+    @DisplayName("PrecomputedContentSigner nested class")
     class PrecomputedContentSignerTests {
 
         @Test
         @DisplayName("Should derive SHA256withRSA algorithm identifier from RSA certificate")
         void shouldCreateSignerWithRsaAlgorithmIdentifier() throws Exception {
-            // Given
             byte[] signature = new byte[256];
             KeyPair keyPair = generateRsaKeyPair();
             X509Certificate rsaCert = generateRsaSelfSignedCertificate(keyPair);
 
-            // When
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, rsaCert);
+            PadesCmsBuilder.PrecomputedContentSigner signer =
+                createPrecomputedContentSigner(signature, rsaCert);
 
-            // Then - RSA cert → SHA256withRSA OID (1.2.840.113549.1.1.11)
             assertThat(signer.getAlgorithmIdentifier()).isNotNull();
             assertThat(signer.getAlgorithmIdentifier().getAlgorithm().getId())
                 .isEqualTo("1.2.840.113549.1.1.11");
@@ -108,15 +95,13 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should derive SHA256withECDSA algorithm identifier from EC certificate")
         void shouldCreateSignerWithEcdsaAlgorithmIdentifier() throws Exception {
-            // Given
             byte[] signature = new byte[72];
             KeyPair ecKeyPair = generateEcKeyPair();
             X509Certificate ecCert = generateEcSelfSignedCertificate(ecKeyPair);
 
-            // When
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, ecCert);
+            PadesCmsBuilder.PrecomputedContentSigner signer =
+                createPrecomputedContentSigner(signature, ecCert);
 
-            // Then - EC cert → SHA256withECDSA OID (1.2.840.10045.4.3.2)
             assertThat(signer.getAlgorithmIdentifier()).isNotNull();
             assertThat(signer.getAlgorithmIdentifier().getAlgorithm().getId())
                 .isEqualTo("1.2.840.10045.4.3.2");
@@ -125,14 +110,12 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should throw SigningException for unsupported key algorithm")
         void shouldThrowForUnsupportedKeyAlgorithm() {
-            // Given
             byte[] signature = new byte[256];
             X509Certificate mockCert = mock(X509Certificate.class);
             java.security.PublicKey mockKey = mock(java.security.PublicKey.class);
             when(mockCert.getPublicKey()).thenReturn(mockKey);
-            when(mockKey.getAlgorithm()).thenReturn("DSA"); // unsupported
+            when(mockKey.getAlgorithm()).thenReturn("DSA");
 
-            // When/Then
             assertThatThrownBy(() -> createPrecomputedContentSigner(signature, mockCert))
                 .isInstanceOf(com.wpanther.pdfsigning.domain.model.SigningException.class)
                 .hasMessageContaining("Unsupported signing key algorithm: DSA");
@@ -141,68 +124,55 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should return pre-computed signature bytes")
         void shouldReturnPrecomputedSignature() {
-            // Given
             byte[] signature = new byte[]{1, 2, 3, 4, 5};
+            PadesCmsBuilder.PrecomputedContentSigner signer =
+                createPrecomputedContentSigner(signature, mockRsaCertificate());
 
-            // When
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(signature, mockRsaCertificate());
-
-            // Then
             assertThat(signer.getSignature()).isEqualTo(signature);
         }
 
         @Test
         @DisplayName("Should return ByteArrayOutputStream for output")
         void shouldReturnByteArrayOutputStream() {
-            // When
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(new byte[256], mockRsaCertificate());
+            PadesCmsBuilder.PrecomputedContentSigner signer =
+                createPrecomputedContentSigner(new byte[256], mockRsaCertificate());
 
-            // Then
             assertThat(signer.getOutputStream()).isInstanceOf(java.io.ByteArrayOutputStream.class);
         }
 
         @Test
         @DisplayName("Should support writing to output stream")
         void shouldSupportWritingToOutputStream() throws Exception {
-            // Given
-            PrecomputedContentSigner signer = createPrecomputedContentSigner(new byte[256], mockRsaCertificate());
+            PadesCmsBuilder.PrecomputedContentSigner signer =
+                createPrecomputedContentSigner(new byte[256], mockRsaCertificate());
 
-            // When
             signer.getOutputStream().write(new byte[]{1, 2, 3});
-
-            // Then - should not throw
             assertThat(signer.getOutputStream().toString()).isNotEmpty();
         }
     }
 
     @Nested
-    @DisplayName("PadesSignedAttributesGenerator")
+    @DisplayName("PadesSignedAttributesGenerator nested class")
     class PadesSignedAttributesGeneratorTests {
 
         @Test
         @DisplayName("Should create generator successfully")
         void shouldCreateGenerator() {
-            // When
-            PadesSignedAttributesGenerator generator =
+            PadesCmsBuilder.PadesSignedAttributesGenerator generator =
                 createPadesSignedAttributesGenerator(mock(X509Certificate.class), new byte[32]);
-
-            // Then
             assertThat(generator).isNotNull();
         }
 
         @Test
         @DisplayName("Should return all required PAdES signed attributes")
         void shouldReturnRequiredAttributes() throws Exception {
-            // Given
             KeyPair keyPair = generateRsaKeyPair();
             X509Certificate cert = generateRsaSelfSignedCertificate(keyPair);
-            PadesSignedAttributesGenerator generator =
+            PadesCmsBuilder.PadesSignedAttributesGenerator generator =
                 createPadesSignedAttributesGenerator(cert, new byte[32]);
 
-            // When
             AttributeTable attributes = generator.getAttributes(Collections.emptyMap());
 
-            // Then
             assertThat(attributes).isNotNull();
             Hashtable<?, ?> attrsHashtable = attributes.toHashtable();
             assertThat(attrsHashtable.containsKey(PKCSObjectIdentifiers.pkcs_9_at_contentType)).isTrue();
@@ -214,13 +184,11 @@ class PadesCmsBuilderTest {
         @Test
         @DisplayName("Should throw exception when certificate encoding fails")
         void shouldThrowForCertificateEncodingFailure() throws Exception {
-            // Given
             X509Certificate mockCert = mock(X509Certificate.class);
             when(mockCert.getEncoded()).thenThrow(new java.security.cert.CertificateEncodingException("Test error"));
-            PadesSignedAttributesGenerator generator =
+            PadesCmsBuilder.PadesSignedAttributesGenerator generator =
                 createPadesSignedAttributesGenerator(mockCert, new byte[32]);
 
-            // When/Then
             assertThatThrownBy(() -> generator.getAttributes(Collections.emptyMap()))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Failed to build PAdES signed attributes");
@@ -230,8 +198,7 @@ class PadesCmsBuilderTest {
     // --- Helper methods ---
 
     private X509Certificate[] createMockCertificateChain() {
-        X509Certificate mockCert = mock(X509Certificate.class);
-        return new X509Certificate[]{mockCert};
+        return new X509Certificate[]{mock(X509Certificate.class)};
     }
 
     private X509Certificate mockRsaCertificate() {
@@ -288,10 +255,11 @@ class PadesCmsBuilderTest {
         }
     }
 
-    private PrecomputedContentSigner createPrecomputedContentSigner(byte[] signature, X509Certificate cert) {
+    private PadesCmsBuilder.PrecomputedContentSigner createPrecomputedContentSigner(
+            byte[] signature, X509Certificate cert) {
         try {
-            java.lang.reflect.Constructor<PrecomputedContentSigner> constructor =
-                PrecomputedContentSigner.class.getDeclaredConstructor(byte[].class, X509Certificate.class);
+            var constructor = PadesCmsBuilder.PrecomputedContentSigner.class
+                .getDeclaredConstructor(byte[].class, X509Certificate.class);
             constructor.setAccessible(true);
             return constructor.newInstance(signature, cert);
         } catch (java.lang.reflect.InvocationTargetException e) {
@@ -302,11 +270,11 @@ class PadesCmsBuilderTest {
         }
     }
 
-    private PadesSignedAttributesGenerator createPadesSignedAttributesGenerator(
+    private PadesCmsBuilder.PadesSignedAttributesGenerator createPadesSignedAttributesGenerator(
             X509Certificate certificate, byte[] digest) {
         try {
-            java.lang.reflect.Constructor<PadesSignedAttributesGenerator> constructor =
-                PadesSignedAttributesGenerator.class.getDeclaredConstructor(X509Certificate.class, byte[].class);
+            var constructor = PadesCmsBuilder.PadesSignedAttributesGenerator.class
+                .getDeclaredConstructor(X509Certificate.class, byte[].class);
             constructor.setAccessible(true);
             return constructor.newInstance(certificate, digest);
         } catch (Exception e) {

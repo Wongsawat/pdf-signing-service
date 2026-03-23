@@ -82,126 +82,127 @@ public class PadesCmsBuilder {
 
         return cms.getEncoded();
     }
-}
 
-/**
- * ContentSigner that returns a pre-computed signature from the CSC service.
- *
- * <p>The CMS algorithm identifier is derived from the signer certificate's
- * public key type: RSA → SHA256withRSA, EC → SHA256withECDSA.</p>
- */
-class PrecomputedContentSigner implements ContentSigner {
+    /**
+     * ContentSigner that returns a pre-computed signature from the CSC service.
+     *
+     * <p>The CMS algorithm identifier is derived from the signer certificate's
+     * public key type: RSA → SHA256withRSA, EC → SHA256withECDSA.</p>
+     */
+    static class PrecomputedContentSigner implements ContentSigner {
 
-    private final byte[] signature;
-    private final AlgorithmIdentifier algorithmIdentifier;
-    private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        private final byte[] signature;
+        private final AlgorithmIdentifier algorithmIdentifier;
+        private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-    PrecomputedContentSigner(byte[] signature, X509Certificate signerCert) {
-        this.signature = signature;
-        this.algorithmIdentifier = deriveAlgorithmIdentifier(signerCert);
-    }
-
-    private static AlgorithmIdentifier deriveAlgorithmIdentifier(X509Certificate cert) {
-        String keyAlg = cert.getPublicKey().getAlgorithm();
-        return switch (keyAlg) {
-            case "RSA" -> new AlgorithmIdentifier(
-                new ASN1ObjectIdentifier("1.2.840.113549.1.1.11") // SHA256withRSA
-            );
-            case "EC" -> new AlgorithmIdentifier(
-                new ASN1ObjectIdentifier("1.2.840.10045.4.3.2") // SHA256withECDSA
-            );
-            default -> throw new SigningException("Unsupported signing key algorithm: " + keyAlg);
-        };
-    }
-
-    @Override
-    public byte[] getSignature() {
-        return signature;
-    }
-
-    @Override
-    public OutputStream getOutputStream() {
-        return outputStream;
-    }
-
-    @Override
-    public AlgorithmIdentifier getAlgorithmIdentifier() {
-        return algorithmIdentifier;
-    }
-}
-
-/**
- * Generates PAdES compliant signed attributes per ETSI EN 319 142-1.
- *
- * <p>Required attributes:
- * <ul>
- *   <li>contentType (id-data): 1.2.840.113549.1.9.3</li>
- *   <li>messageDigest: 1.2.840.113549.1.9.4</li>
- *   <li>signingTime: 1.2.840.113549.1.9.5</li>
- *   <li>signingCertificateV2: 1.2.840.113549.1.9.16.2.47</li>
- * </ul>
- */
-class PadesSignedAttributesGenerator implements CMSAttributeTableGenerator {
-
-    private static final String SHA256_OID = "2.16.840.1.101.3.4.2.1";
-    private final X509Certificate certificate;
-    private final byte[] digest;
-
-    PadesSignedAttributesGenerator(X509Certificate certificate, byte[] digest) {
-        this.certificate = certificate;
-        this.digest = digest;
-    }
-
-    @Override
-    public AttributeTable getAttributes(Map params) {
-        Hashtable<ASN1ObjectIdentifier, ASN1Encodable> attributes = new Hashtable<>();
-
-        try {
-            attributes.put(
-                PKCSObjectIdentifiers.pkcs_9_at_contentType,
-                new ASN1ObjectIdentifier("1.2.840.113549.1.7.1") // id-data
-            );
-
-            attributes.put(
-                PKCSObjectIdentifiers.pkcs_9_at_messageDigest,
-                new DEROctetString(digest)
-            );
-
-            attributes.put(
-                PKCSObjectIdentifiers.pkcs_9_at_signingTime,
-                new ASN1GeneralizedTime(new Date())
-            );
-
-            attributes.put(
-                PKCSObjectIdentifiers.id_aa_signingCertificateV2,
-                buildSigningCertificateV2()
-            );
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to build PAdES signed attributes", e);
+        PrecomputedContentSigner(byte[] signature, X509Certificate signerCert) {
+            this.signature = signature;
+            this.algorithmIdentifier = deriveAlgorithmIdentifier(signerCert);
         }
 
-        return new AttributeTable(attributes);
+        private static AlgorithmIdentifier deriveAlgorithmIdentifier(X509Certificate cert) {
+            String keyAlg = cert.getPublicKey().getAlgorithm();
+            return switch (keyAlg) {
+                case "RSA" -> new AlgorithmIdentifier(
+                    new ASN1ObjectIdentifier("1.2.840.113549.1.1.11") // SHA256withRSA
+                );
+                case "EC" -> new AlgorithmIdentifier(
+                    new ASN1ObjectIdentifier("1.2.840.10045.4.3.2") // SHA256withECDSA
+                );
+                default -> throw new SigningException("Unsupported signing key algorithm: " + keyAlg);
+            };
+        }
+
+        @Override
+        public byte[] getSignature() {
+            return signature;
+        }
+
+        @Override
+        public OutputStream getOutputStream() {
+            return outputStream;
+        }
+
+        @Override
+        public AlgorithmIdentifier getAlgorithmIdentifier() {
+            return algorithmIdentifier;
+        }
     }
 
-    private ASN1Sequence buildSigningCertificateV2() throws Exception {
-        byte[] certDigest = computeCertificateDigest(certificate);
+    /**
+     * Generates PAdES compliant signed attributes per ETSI EN 319 142-1.
+     *
+     * <p>Required attributes:
+     * <ul>
+     *   <li>contentType (id-data): 1.2.840.113549.1.9.3</li>
+     *   <li>messageDigest: 1.2.840.113549.1.9.4</li>
+     *   <li>signingTime: 1.2.840.113549.1.9.5</li>
+     *   <li>signingCertificateV2: 1.2.840.113549.1.9.16.2.47</li>
+     * </ul>
+     */
+    static class PadesSignedAttributesGenerator implements CMSAttributeTableGenerator {
 
-        ASN1EncodableVector certIdVector = new ASN1EncodableVector();
-        certIdVector.add(new AlgorithmIdentifier(
-            new ASN1ObjectIdentifier(SHA256_OID)
-        ));
-        certIdVector.add(new DEROctetString(certDigest));
+        private static final String SHA256_OID = "2.16.840.1.101.3.4.2.1";
+        private final X509Certificate certificate;
+        private final byte[] digest;
 
-        return new DERSequence(new DERSequence(certIdVector));
-    }
+        PadesSignedAttributesGenerator(X509Certificate certificate, byte[] digest) {
+            this.certificate = certificate;
+            this.digest = digest;
+        }
 
-    private byte[] computeCertificateDigest(X509Certificate cert) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return md.digest(cert.getEncoded());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to compute certificate digest", e);
+        @Override
+        @SuppressWarnings("rawtypes")
+        public AttributeTable getAttributes(Map params) {
+            Hashtable<ASN1ObjectIdentifier, ASN1Encodable> attributes = new Hashtable<>();
+
+            try {
+                attributes.put(
+                    PKCSObjectIdentifiers.pkcs_9_at_contentType,
+                    new ASN1ObjectIdentifier("1.2.840.113549.1.7.1") // id-data
+                );
+
+                attributes.put(
+                    PKCSObjectIdentifiers.pkcs_9_at_messageDigest,
+                    new DEROctetString(digest)
+                );
+
+                attributes.put(
+                    PKCSObjectIdentifiers.pkcs_9_at_signingTime,
+                    new ASN1GeneralizedTime(new Date())
+                );
+
+                attributes.put(
+                    PKCSObjectIdentifiers.id_aa_signingCertificateV2,
+                    buildSigningCertificateV2()
+                );
+
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to build PAdES signed attributes", e);
+            }
+
+            return new AttributeTable(attributes);
+        }
+
+        private ASN1Sequence buildSigningCertificateV2() throws Exception {
+            byte[] certDigest = computeCertificateDigest(certificate);
+
+            ASN1EncodableVector certIdVector = new ASN1EncodableVector();
+            certIdVector.add(new AlgorithmIdentifier(
+                new ASN1ObjectIdentifier(SHA256_OID)
+            ));
+            certIdVector.add(new DEROctetString(certDigest));
+
+            return new DERSequence(new DERSequence(certIdVector));
+        }
+
+        private byte[] computeCertificateDigest(X509Certificate cert) {
+            try {
+                MessageDigest md = MessageDigest.getInstance("SHA-256");
+                return md.digest(cert.getEncoded());
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to compute certificate digest", e);
+            }
         }
     }
 }
