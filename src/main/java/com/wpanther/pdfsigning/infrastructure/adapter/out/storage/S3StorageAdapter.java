@@ -18,8 +18,11 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.net.URI;
+import java.time.Duration;
 import java.time.LocalDate;
 
 /**
@@ -27,6 +30,7 @@ import java.time.LocalDate;
  * <p>
  * Implements {@link DocumentStoragePort} using S3-compatible storage.
  * Stores files with key: {documentType}/YYYY/MM/DD/{documentType}-{documentId}.pdf
+ * Returns presigned GET URLs so downstream services can download from private buckets.
  * </p>
  */
 @Component
@@ -36,18 +40,18 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
     private final StorageProperties storageProperties;
     private volatile S3Client s3Client;
-    private volatile String baseUrl;
+    private volatile S3Presigner s3Presigner;
 
     /**
      * Constructor for Spring-managed bean.
-     * S3 client is initialized via @PostConstruct after properties are injected.
+     * S3 client and presigner are initialized via @PostConstruct after properties are injected.
      */
     public S3StorageAdapter(StorageProperties storageProperties) {
         this.storageProperties = storageProperties;
     }
 
     /**
-     * Initializes the S3 client and base URL from configuration.
+     * Initializes the S3 client and presigner from configuration.
      * Called by Spring after constructor and property injection.
      * This method is synchronized to ensure thread-safe initialization.
      */
@@ -59,21 +63,26 @@ public class S3StorageAdapter implements DocumentStoragePort {
         }
 
         StorageProperties.S3 s3 = storageProperties.getS3();
-        String computedBaseUrl = s3.getBaseUrl() != null && !s3.getBaseUrl().isEmpty()
-            ? s3.getBaseUrl()
-            : "https://s3." + s3.getRegion() + ".amazonaws.com/" + s3.getBucketName() + "/";
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(
             s3.getAccessKey(),
             s3.getSecretKey()
         );
+        StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);
+        Region region = Region.of(s3.getRegion());
 
         var s3Builder = S3Client.builder()
-            .region(Region.of(s3.getRegion()))
-            .credentialsProvider(StaticCredentialsProvider.create(credentials));
+            .region(region)
+            .credentialsProvider(credentialsProvider);
+
+        var presignerBuilder = S3Presigner.builder()
+            .region(region)
+            .credentialsProvider(credentialsProvider);
 
         if (s3.getEndpoint() != null && !s3.getEndpoint().isEmpty()) {
-            s3Builder.endpointOverride(URI.create(s3.getEndpoint()));
+            URI endpoint = URI.create(s3.getEndpoint());
+            s3Builder.endpointOverride(endpoint);
+            presignerBuilder.endpointOverride(endpoint);
             log.info("Using custom S3 endpoint: {}", s3.getEndpoint());
         }
 
@@ -83,21 +92,21 @@ public class S3StorageAdapter implements DocumentStoragePort {
         }
 
         this.s3Client = s3Builder.build();
-        this.baseUrl = computedBaseUrl;
+        this.s3Presigner = presignerBuilder.build();
 
-        log.info("Initialized S3 document storage adapter: bucket={}, region={}",
-            s3.getBucketName(), s3.getRegion());
+        log.info("Initialized S3 document storage adapter: bucket={}, region={}, presignedUrlTtlMinutes={}",
+            s3.getBucketName(), s3.getRegion(), s3.getPresignedUrlTtlMinutes());
     }
 
     /**
-     * Constructor for testing with injected S3Client.
+     * Constructor for testing with injected S3Client and S3Presigner.
      * Package-private for test access only.
      * This bypasses @PostConstruct initialization for unit testing.
      */
-    S3StorageAdapter(StorageProperties storageProperties, S3Client s3Client, String baseUrl) {
+    S3StorageAdapter(StorageProperties storageProperties, S3Client s3Client, S3Presigner s3Presigner) {
         this.storageProperties = storageProperties;
         this.s3Client = s3Client;
-        this.baseUrl = baseUrl;
+        this.s3Presigner = s3Presigner;
     }
 
     @Override
@@ -116,22 +125,18 @@ public class S3StorageAdapter implements DocumentStoragePort {
 
             s3Client.putObject(putObjectRequest, RequestBody.fromBytes(documentData));
 
-            // Generate simple URL (not presigned)
-            String url = baseUrl + key;
+            String url = generatePresignedUrl(key);
             log.info("Stored document in S3: type={}, bucket={}, key={}, size={} bytes",
                 documentType, s3.getBucketName(), key, documentData.length);
 
             return url;
 
         } catch (StorageException e) {
-            // Re-throw domain exceptions as-is
             throw e;
         } catch (S3Exception e) {
-            // Wrap S3-specific exceptions
             log.error("Failed to store document in S3", e);
             throw new StorageException("Failed to store document in S3: " + e.getMessage(), e);
         } catch (Exception e) {
-            // Wrap unexpected exceptions
             log.error("Unexpected error storing document in S3", e);
             throw new StorageException("Failed to store document in S3: " + e.getMessage(), e);
         }
@@ -141,7 +146,6 @@ public class S3StorageAdapter implements DocumentStoragePort {
     public byte[] retrieve(String storageUrl) {
         try {
             StorageProperties.S3 s3 = storageProperties.getS3();
-            // Extract key from pre-signed URL or use directly if it's just a key
             String key = extractKeyFromUrl(storageUrl);
 
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
@@ -149,16 +153,13 @@ public class S3StorageAdapter implements DocumentStoragePort {
                 .key(key)
                 .build();
 
-            // Read bytes from the response InputStream
             try (var response = s3Client.getObject(getObjectRequest)) {
                 return response.readAllBytes();
             }
 
         } catch (StorageException e) {
-            // Re-throw domain exceptions as-is
             throw e;
         } catch (Exception e) {
-            // Wrap unexpected exceptions
             log.error("Unexpected error retrieving document from S3", e);
             throw new StorageException("Failed to retrieve document: " + e.getMessage(), e);
         }
@@ -179,10 +180,8 @@ public class S3StorageAdapter implements DocumentStoragePort {
             log.info("Deleted document from S3: bucket={}, key={}", s3.getBucketName(), key);
 
         } catch (StorageException e) {
-            // Re-throw domain exceptions as-is
             throw e;
         } catch (Exception e) {
-            // Wrap unexpected exceptions
             log.error("Unexpected error deleting document from S3", e);
             throw new StorageException("Failed to delete document: " + e.getMessage(), e);
         }
@@ -199,23 +198,34 @@ public class S3StorageAdapter implements DocumentStoragePort {
     }
 
     /**
+     * Generate a presigned GET URL for the given S3 key.
+     * The TTL is taken from {@code app.storage.s3.presigned-url-ttl-minutes}.
+     */
+    private String generatePresignedUrl(String key) {
+        StorageProperties.S3 s3 = storageProperties.getS3();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofMinutes(s3.getPresignedUrlTtlMinutes()))
+            .getObjectRequest(r -> r.bucket(s3.getBucketName()).key(key))
+            .build();
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
+    }
+
+    /**
      * Extract S3 key from storage URL.
-     * If the URL is a pre-signed URL, extract the key from query parameters.
-     * Otherwise, assume it's already a key.
+     * Handles presigned URLs (strips query parameters), full path URLs, and bare keys.
      */
     private String extractKeyFromUrl(String storageUrl) {
         try {
             String bucketName = storageProperties.getS3().getBucketName();
-            if (storageUrl.contains("?")) {
-                // Pre-signed URL - extract key from URL path
-                String pathPart = storageUrl.substring(0, storageUrl.indexOf("?"));
-                int bucketIndex = pathPart.indexOf("/" + bucketName + "/");
-                if (bucketIndex >= 0) {
-                    return pathPart.substring(bucketIndex + bucketName.length() + 1);
-                }
+            String pathPart = storageUrl.contains("?")
+                ? storageUrl.substring(0, storageUrl.indexOf("?"))
+                : storageUrl;
+
+            int bucketIndex = pathPart.indexOf("/" + bucketName + "/");
+            if (bucketIndex >= 0) {
+                return pathPart.substring(bucketIndex + bucketName.length() + 2);
             }
-            // Assume it's already a key or a simple path
-            return storageUrl;
+            return pathPart;
         } catch (Exception e) {
             log.warn("Could not extract key from URL, using as-is: {}", storageUrl);
             return storageUrl;

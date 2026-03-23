@@ -110,5 +110,14 @@ public class StorageProperties {
          */
         @Pattern(regexp = "^https?://.*", message = "S3 base URL must be a valid HTTP/HTTPS URL")
         private String baseUrl;
+
+        /**
+         * TTL in minutes for presigned GET URLs returned after document upload.
+         * Must cover the full saga duration so downstream services can download the PDF.
+         * Default: 60 minutes.
+         */
+        @Min(value = 1, message = "Presigned URL TTL must be at least 1 minute")
+        @Max(value = 10080, message = "Presigned URL TTL must not exceed 7 days (10080 minutes)")
+        private int presignedUrlTtlMinutes = 60;
     }
 }

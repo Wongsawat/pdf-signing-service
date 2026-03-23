@@ -124,8 +124,9 @@ app:
       secret-key: ${AWS_SECRET_KEY:minioadmin}
       endpoint: ${S3_ENDPOINT:http://localhost:9100}
       path-style-access: ${S3_PATH_STYLE_ACCESS:true}
-      # Pre-signed URL expiration in seconds (default: 1 hour)
-      presigned-url-expiration-seconds: ${S3_PRESIGNED_URL_EXPIRATION_SECONDS:3600}
+      # TTL in minutes for presigned GET URLs returned after document upload.
+      # Must cover the full saga duration so downstream services can download the PDF.
+      presigned-url-ttl-minutes: ${S3_PRESIGNED_URL_TTL_MINUTES:60}
 
   # PDF size validation
   pdf:
