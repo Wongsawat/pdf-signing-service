@@ -31,9 +31,10 @@ public class SadTokenValidator {
     }
 
     /**
-     * Default constructor for testing.
+     * Package-private constructor for testing — use {@link #SadTokenValidator(CscProperties)}
+     * in production to ensure configuration is always injected.
      */
-    public SadTokenValidator() {
+    SadTokenValidator() {
         this.cscProperties = null;
     }
 
