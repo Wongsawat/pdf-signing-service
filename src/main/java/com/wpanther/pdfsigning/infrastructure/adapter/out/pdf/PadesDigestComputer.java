@@ -13,8 +13,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Calendar;
 
 /**
@@ -49,68 +49,36 @@ public class PadesDigestComputer {
      * @throws IOException if PDF cannot be processed
      */
     public byte[] computeByteRangeDigest(InputStream pdf) throws IOException {
-        Path tempFile = null;
-        PDDocument document = null;
-        IOException primaryException = null;
+        byte[] pdfBytes = pdf.readAllBytes();
+        return PdfTempFiles.withTempFile("pdf-sign-", tmp -> {
+            Files.write(tmp, pdfBytes);
+            try (PDDocument document = Loader.loadPDF(tmp.toFile())) {
+                PDSignature signature = buildSignatureDict();
+                document.addSignature(signature);
 
-        try {
-            byte[] pdfBytes = pdf.readAllBytes();
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                ExternalSigningSupport externalSigning =
+                    document.saveIncrementalForExternalSigning(output);
 
-            tempFile = Files.createTempFile("pdf-sign-", ".pdf");
-            tempFile.toFile().deleteOnExit();
-            Files.write(tempFile, pdfBytes);
-
-            document = Loader.loadPDF(tempFile.toFile());
-
-            PDSignature signature = new PDSignature();
-            signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
-            signature.setSubFilter(SUBFILTER);
-            signature.setReason(SIGNATURE_REASON);
-            signature.setLocation(SIGNATURE_LOCATION);
-            signature.setSignDate(Calendar.getInstance());
-
-            document.addSignature(signature);
-
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            ExternalSigningSupport externalSigning =
-                document.saveIncrementalForExternalSigning(output);
-
-            try (InputStream dataToSign = externalSigning.getContent()) {
-                byte[] data = dataToSign.readAllBytes();
-                return MessageDigest.getInstance(DIGEST_ALGORITHM).digest(data);
-            } catch (Exception e) {
-                throw new IOException("Failed to compute PDF digest", e);
-            }
-
-        } catch (IOException e) {
-            primaryException = e;
-            throw e;
-        } finally {
-            Exception cleanupException = null;
-
-            if (document != null) {
-                try {
-                    document.close();
-                } catch (Exception e) {
-                    cleanupException = e;
-                    log.warn("Failed to close PDF document: {}", e.getMessage());
-                }
-            }
-
-            if (tempFile != null) {
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException e) {
-                    log.warn("Failed to delete temp file: {} (will be cleaned up on JVM exit)", tempFile);
-                    if (cleanupException == null) {
-                        cleanupException = e;
+                try (InputStream dataToSign = externalSigning.getContent()) {
+                    byte[] data = dataToSign.readAllBytes();
+                    try {
+                        return MessageDigest.getInstance(DIGEST_ALGORITHM).digest(data);
+                    } catch (NoSuchAlgorithmException e) {
+                        throw new IOException("Failed to compute PDF digest", e);
                     }
                 }
             }
+        });
+    }
 
-            if (primaryException != null && cleanupException != null) {
-                primaryException.addSuppressed(cleanupException);
-            }
-        }
+    private PDSignature buildSignatureDict() {
+        PDSignature signature = new PDSignature();
+        signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+        signature.setSubFilter(SUBFILTER);
+        signature.setReason(SIGNATURE_REASON);
+        signature.setLocation(SIGNATURE_LOCATION);
+        signature.setSignDate(Calendar.getInstance());
+        return signature;
     }
 }

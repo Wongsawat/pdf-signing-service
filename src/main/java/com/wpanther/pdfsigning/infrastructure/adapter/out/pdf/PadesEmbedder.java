@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Calendar;
 
 /**
@@ -39,63 +38,29 @@ public class PadesEmbedder {
      * @throws IOException if PDF processing fails
      */
     public byte[] embedSignature(byte[] pdfBytes, byte[] cmsSignature) throws IOException {
-        Path tempFile = null;
-        PDDocument document = null;
-        IOException primaryException = null;
+        return PdfTempFiles.withTempFile("pdf-sign-", tmp -> {
+            Files.write(tmp, pdfBytes);
+            try (PDDocument document = Loader.loadPDF(tmp.toFile())) {
+                PDSignature signature = buildSignatureDict();
+                document.addSignature(signature);
 
-        try {
-            tempFile = Files.createTempFile("pdf-sign-", ".pdf");
-            tempFile.toFile().deleteOnExit();
-            Files.write(tempFile, pdfBytes);
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                ExternalSigningSupport externalSigning =
+                    document.saveIncrementalForExternalSigning(output);
 
-            document = Loader.loadPDF(tempFile.toFile());
-
-            PDSignature signature = new PDSignature();
-            signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
-            signature.setSubFilter(SUBFILTER);
-            signature.setReason(SIGNATURE_REASON);
-            signature.setLocation(SIGNATURE_LOCATION);
-            signature.setSignDate(Calendar.getInstance());
-
-            document.addSignature(signature);
-
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            ExternalSigningSupport externalSigning =
-                document.saveIncrementalForExternalSigning(output);
-
-            externalSigning.setSignature(cmsSignature);
-
-            return output.toByteArray();
-
-        } catch (IOException e) {
-            primaryException = e;
-            throw e;
-        } finally {
-            Exception cleanupException = null;
-
-            if (document != null) {
-                try {
-                    document.close();
-                } catch (Exception e) {
-                    cleanupException = e;
-                    log.warn("Failed to close PDF document: {}", e.getMessage());
-                }
+                externalSigning.setSignature(cmsSignature);
+                return output.toByteArray();
             }
+        });
+    }
 
-            if (tempFile != null) {
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException e) {
-                    log.warn("Failed to delete temp file: {} (will be cleaned up on JVM exit)", tempFile);
-                    if (cleanupException == null) {
-                        cleanupException = e;
-                    }
-                }
-            }
-
-            if (primaryException != null && cleanupException != null) {
-                primaryException.addSuppressed(cleanupException);
-            }
-        }
+    private PDSignature buildSignatureDict() {
+        PDSignature signature = new PDSignature();
+        signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+        signature.setSubFilter(SUBFILTER);
+        signature.setReason(SIGNATURE_REASON);
+        signature.setLocation(SIGNATURE_LOCATION);
+        signature.setSignDate(Calendar.getInstance());
+        return signature;
     }
 }
