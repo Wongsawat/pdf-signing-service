@@ -205,24 +205,25 @@ public class S3StorageAdapter implements DocumentStoragePort {
     }
 
     /**
-     * Extract S3 key from storage URL.
-     * Handles presigned URLs (strips query parameters), full path URLs, and bare keys.
+     * Extract S3 key from a storage URL.
+     *
+     * @param storageUrl URL returned by {@link #store} (presigned GET or full path)
+     * @return the S3 object key
+     * @throws StorageException if the URL is not from the configured bucket or cannot be parsed
      */
     private String extractKeyFromUrl(String storageUrl) {
-        try {
-            String bucketName = storageProperties.getS3().getBucketName();
-            String pathPart = storageUrl.contains("?")
-                ? storageUrl.substring(0, storageUrl.indexOf("?"))
-                : storageUrl;
+        String bucketName = storageProperties.getS3().getBucketName();
+        String pathPart = storageUrl.contains("?")
+            ? storageUrl.substring(0, storageUrl.indexOf("?"))
+            : storageUrl;
 
-            int bucketIndex = pathPart.indexOf("/" + bucketName + "/");
-            if (bucketIndex >= 0) {
-                return pathPart.substring(bucketIndex + bucketName.length() + 2);
-            }
-            return pathPart;
-        } catch (Exception e) {
-            log.warn("Could not extract key from URL, using as-is: {}", storageUrl);
-            return storageUrl;
+        int bucketIndex = pathPart.indexOf("/" + bucketName + "/");
+        if (bucketIndex < 0) {
+            throw new StorageException(
+                "Storage URL is not from the configured bucket '"
+                + bucketName + "': " + storageUrl);
         }
+
+        return pathPart.substring(bucketIndex + bucketName.length() + 2);
     }
 }

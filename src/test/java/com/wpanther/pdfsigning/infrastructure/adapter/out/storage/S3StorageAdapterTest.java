@@ -189,14 +189,14 @@ class S3StorageAdapterTest {
         }
 
         @Test
-        @DisplayName("Should extract key from URL correctly")
-        void shouldExtractKeyFromUrl() {
-            when(mockS3Client.getObject(any(GetObjectRequest.class)))
-                .thenThrow(new RuntimeException("Stream-based response"));
-
+        @DisplayName("Should throw StorageException for bare key without bucket path")
+        void shouldThrowForBareKeyWithoutBucketPath() {
+            // Bare key has no bucket path — extractKeyFromUrl throws before S3 is called
             assertThatThrownBy(() -> adapter.retrieve("test-key"))
-                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
-            verify(mockS3Client).getObject(any(GetObjectRequest.class));
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
+                .hasMessageContaining("not from the configured bucket");
+
+            verifyNoInteractions(mockS3Client);
         }
     }
 
@@ -263,25 +263,25 @@ class S3StorageAdapterTest {
         }
 
         @Test
-        @DisplayName("Should handle simple key without URL structure")
-        void shouldHandleSimpleKey() {
-            when(mockS3Client.getObject(any(GetObjectRequest.class)))
-                .thenThrow(new RuntimeException("Stream response"));
-
+        @DisplayName("Should throw StorageException for URL without configured bucket")
+        void shouldThrowForUrlWithoutConfiguredBucket() {
+            // URL does not contain the configured bucket name — extractKeyFromUrl throws before S3 is called
             assertThatThrownBy(() -> adapter.retrieve("simple-key.pdf"))
-                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
+                .hasMessageContaining("not from the configured bucket");
 
-            verify(mockS3Client).getObject(any(GetObjectRequest.class));
+            verifyNoInteractions(mockS3Client);
         }
 
         @Test
-        @DisplayName("Should handle malformed URL gracefully in retrieve")
-        void shouldHandleMalformedUrl() {
-            when(mockS3Client.getObject(any(GetObjectRequest.class)))
-                .thenThrow(S3Exception.builder().message("Invalid key").build());
-
+        @DisplayName("Should throw StorageException for malformed URL")
+        void shouldThrowForMalformedUrl() {
+            // URL has no recognizable bucket path — extractKeyFromUrl throws before S3 is called
             assertThatThrownBy(() -> adapter.retrieve("malformed:///weird//url.pdf"))
-                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class);
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
+                .hasMessageContaining("not from the configured bucket");
+
+            verifyNoInteractions(mockS3Client);
         }
     }
 
