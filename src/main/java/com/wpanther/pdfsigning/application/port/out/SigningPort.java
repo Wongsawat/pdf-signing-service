@@ -43,9 +43,14 @@ public interface SigningPort {
 
     /**
      * Result of signing operation containing both signed PDF and certificate chain.
+     *
+     * @param transactionId CSC service operation ID (operationID from signHash response),
+     *                      or null if the CSC service does not return one. Used for
+     *                      audit traceability to correlate with CSC service logs.
      */
     record SigningResult(
         byte[] signedPdf,
-        X509Certificate[] certificateChain
+        X509Certificate[] certificateChain,
+        String transactionId
     ) {}
 }

@@ -126,8 +126,8 @@ public class CscSigningAdapter implements SigningPort {
             byte[] signedPdf = pdfEmbedder.embedSignature(pdfBytes, cmsSignature);
             log.debug("Embedded signature, signed PDF size: {} bytes", signedPdf.length);
 
-            // Return both signed PDF and certificate chain
-            return new SigningResult(signedPdf, responseCertChain);
+            // Return both signed PDF, certificate chain, and CSC operation ID (for audit traceability)
+            return new SigningResult(signedPdf, responseCertChain, signResponse.getOperationID());
 
         } catch (SigningException e) {
             // Re-throw domain exceptions as-is

@@ -123,7 +123,12 @@ public class DomainPdfSigningService {
         log.debug("Stored signed PDF at: {}", storageUrl);
 
         // Step 5: Build result
-        String transactionId = UUID.randomUUID().toString();
+        // transactionId from CSC signHash response enables audit traceability to CSC service logs.
+        // Falls back to local UUID if CSC does not provide an operationID (operationID is optional
+        // in CSC API v2.0 signHash response — not all CSC providers return it).
+        String transactionId = signingResult.transactionId() != null
+            ? signingResult.transactionId()
+            : UUID.randomUUID().toString();
         String certificatePem = extractCertificatePem(signingResult.certificateChain());
         Instant signatureTimestamp = Instant.now();
 
