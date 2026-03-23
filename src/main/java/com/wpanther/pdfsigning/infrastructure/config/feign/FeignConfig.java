@@ -3,7 +3,6 @@ package com.wpanther.pdfsigning.infrastructure.config.feign;
 import feign.Logger;
 import feign.Request;
 import feign.RequestInterceptor;
-import feign.Retryer;
 import feign.codec.ErrorDecoder;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
@@ -34,15 +33,6 @@ public class FeignConfig {
     @Bean
     Logger.Level feignLoggerLevel() {
         return Logger.Level.BASIC;
-    }
-
-    /**
-     * Configures Feign retry behavior.
-     * Retries up to 3 times with 1 second intervals.
-     */
-    @Bean
-    public Retryer feignRetryer() {
-        return new Retryer.Default(1000, 1000, 3);
     }
 
     /**

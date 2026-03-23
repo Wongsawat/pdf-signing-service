@@ -17,8 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  */
 @FeignClient(
         name = "csc-api-client",
-        url = "${app.csc.service-url}",
-        configuration = com.wpanther.pdfsigning.infrastructure.config.feign.FeignConfig.class
+        url = "${app.csc.service-url}"
 )
 public interface CSCApiClient {
 
