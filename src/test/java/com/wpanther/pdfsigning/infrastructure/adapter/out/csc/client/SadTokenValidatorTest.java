@@ -82,17 +82,6 @@ class SadTokenValidatorTest {
         }
 
         @Test
-        @DisplayName("Should reject SAD token that is too short")
-        void shouldRejectShortSadToken() {
-            CSCAuthorizeResponse response = new CSCAuthorizeResponse();
-            response.setSAD("short");
-
-            assertThatThrownBy(() -> validator.validate(response, "test-credential"))
-                .isInstanceOf(SadTokenValidator.SadTokenValidationException.class)
-                .hasMessageContaining("too short");
-        }
-
-        @Test
         @DisplayName("Should reject expired SAD token")
         void shouldRejectExpiredSadToken() {
             CSCAuthorizeResponse response = new CSCAuthorizeResponse();

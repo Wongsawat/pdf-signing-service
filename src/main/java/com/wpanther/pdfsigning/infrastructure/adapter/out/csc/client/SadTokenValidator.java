@@ -54,20 +54,13 @@ public class SadTokenValidator {
             throw new SadTokenValidationException("SAD token response is null");
         }
 
-        // 1. Check SAD token is present
+        // 1. Check SAD token is present and non-empty
         String sad = response.getSAD();
         if (sad == null || sad.trim().isEmpty()) {
             throw new SadTokenValidationException("SAD token is null or empty");
         }
 
-        // 2. Check SAD token format (should be a non-empty base64-like string)
-        if (sad.length() < 20) {
-            throw new SadTokenValidationException(
-                "SAD token appears invalid (too short): " + sad.length() + " characters"
-            );
-        }
-
-        // 3. Validate expiration if present
+        // 2. Validate expiration if present
         Long expiresIn = response.getExpiresIn();
         if (expiresIn != null) {
             long minExpiry = cscProperties != null
