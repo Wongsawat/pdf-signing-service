@@ -208,27 +208,21 @@ class LocalStorageAdapterTest {
         }
 
         @Test
-        @DisplayName("Should delete by direct path when URL doesn't match base URL")
-        void shouldDeleteByDirectPath() throws IOException {
-            // Given
-            Path testFile = tempDir.resolve("direct-file.pdf");
-            Files.write(testFile, "content".getBytes());
-
-            // When
-            adapter.delete(testFile.toString());
-
-            // Then
-            assertThat(Files.exists(testFile)).isFalse();
+        @DisplayName("Should throw when URL does not match local storage configuration")
+        void shouldThrowWhenUrlDoesNotMatchStorage() {
+            // When/Then - direct path not accepted; must be a URL from this storage instance
+            assertThatThrownBy(() -> adapter.delete("/var/signed-documents/2024/01/01/signed-pdf-123.pdf"))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
+                .hasMessageContaining("does not match local storage configuration");
         }
 
         @Test
-        @DisplayName("Should handle deletion of non-existent file by direct path")
-        void shouldHandleNonExistentFileByDirectPath() {
-            // Given - file doesn't exist
-            Path nonExistentFile = tempDir.resolve("non-existent.pdf");
-
-            // When/Then - should not throw
-            adapter.delete(nonExistentFile.toString());
+        @DisplayName("Should throw StorageException for URL not from this storage instance")
+        void shouldThrowForUrlNotFromThisStorage() {
+            // When/Then - rejects URLs from other storage instances
+            assertThatThrownBy(() -> adapter.delete("http://other-host/storage/doc.pdf"))
+                .isInstanceOf(com.wpanther.pdfsigning.domain.model.StorageException.class)
+                .hasMessageContaining("does not match local storage configuration");
         }
     }
 
