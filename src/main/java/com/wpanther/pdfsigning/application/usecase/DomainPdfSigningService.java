@@ -9,6 +9,7 @@ import com.wpanther.pdfsigning.application.port.out.SigningPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
@@ -165,16 +166,38 @@ public class DomainPdfSigningService {
     }
 
     /**
-     * Extract storage path from storage URL.
+     * Extract the filename (last path segment) from a storage URL using proper URI parsing.
+     *
+     * <p>The URL is already validated by the storage adapter that produced it
+     * (LocalStorageAdapter or S3StorageAdapter). This method uses URI to safely
+     * extract the last path segment regardless of URL format variations
+     * (presigned query params, double slashes, encoded chars).</p>
+     *
+     * @param storageUrl URL returned by DocumentStoragePort.store()
+     * @return the filename portion of the URL
      */
     private String extractPathFromUrl(String storageUrl) {
-        // Extract filename from URL
-        // Format: http://localhost:8080/documents/YYYY/MM/DD/signed-pdf-{uuid}.pdf
-        int lastSlash = storageUrl.lastIndexOf('/');
-        if (lastSlash >= 0 && lastSlash < storageUrl.length() - 1) {
-            return storageUrl.substring(lastSlash + 1);
+        try {
+            URI uri = URI.create(storageUrl);
+            String path = uri.getPath();
+
+            if (path == null || path.isEmpty()) {
+                return storageUrl;
+            }
+
+            int lastSlash = path.lastIndexOf('/');
+            if (lastSlash >= 0 && lastSlash < path.length() - 1) {
+                return path.substring(lastSlash + 1);
+            }
+            return path;
+        } catch (Exception e) {
+            // Fallback — storage URL was already validated by storage adapter
+            int lastSlash = storageUrl.lastIndexOf('/');
+            if (lastSlash >= 0 && lastSlash < storageUrl.length() - 1) {
+                return storageUrl.substring(lastSlash + 1);
+            }
+            return storageUrl;
         }
-        return storageUrl;
     }
 
     /**
