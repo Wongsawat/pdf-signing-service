@@ -84,15 +84,18 @@ public class FeignConfig {
 
     /**
      * Customizes the Resilience4J circuit breaker factory.
+     *
+     * <p>Named circuit breaker instances (csc-auth, csc-sign-hash) are configured
+     * in application.yml via resilience4j.circuitbreaker.instances and
+     * resilience4j.timelimiter.instances. This default customizer applies only
+     * to the unnamed "default" instance, which is not used by this service.
+     * Returning null defers to application.yml for the named instances.</p>
      */
     @Bean
     public Customizer<Resilience4JCircuitBreakerFactory> defaultCustomizer(
             CircuitBreakerRegistry circuitBreakerRegistry,
             TimeLimiterRegistry timeLimiterRegistry) {
 
-        return factory -> factory.configureDefault(id -> {
-            // Circuit breaker and time limiter are configured in application.yml
-            return null;
-        });
+        return factory -> factory.configureDefault(id -> null);
     }
 }
