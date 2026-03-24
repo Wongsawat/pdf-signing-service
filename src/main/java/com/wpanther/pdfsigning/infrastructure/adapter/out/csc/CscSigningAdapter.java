@@ -126,8 +126,11 @@ public class CscSigningAdapter implements SigningPort {
             byte[] signedPdf = pdfEmbedder.embedSignature(pdfBytes, cmsSignature);
             log.debug("Embedded signature, signed PDF size: {} bytes", signedPdf.length);
 
-            // Return both signed PDF, certificate chain, and CSC operation ID (for audit traceability)
-            return new SigningResult(signedPdf, responseCertChain, signResponse.getOperationID());
+            // Return both signed PDF, certificate chain, CSC operation ID (for audit traceability),
+            // and trusted timestamp from TSA (if available — only for PAdES-B-T and higher).
+            // timestampData is RFC 3161 TimeStampToken; null for PAdES-B-B.
+            Instant timestamp = extractTimestamp(signResponse);
+            return new SigningResult(signedPdf, responseCertChain, signResponse.getOperationID(), timestamp);
 
         } catch (SigningException e) {
             // Re-throw domain exceptions as-is
@@ -152,6 +155,68 @@ public class CscSigningAdapter implements SigningPort {
             // Wrap unexpected exceptions
             log.error("Unexpected error validating certificate chain", e);
             throw new SigningException("Certificate validation failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Extracts the trusted timestamp from CSC signHash response's timestampData field.
+     *
+     * <p>timestampData contains an RFC 3161 TimeStampToken (Base64-encoded) when a trusted
+     * timestamp is requested (PAdES-B-T or higher). For PAdES-B-B (no TSA),
+     * timestampData is null and this method returns null.</p>
+     *
+     * <p>The RFC 3161 token is parsed to extract the genTime from the TSTInfo structure.
+     * If parsing fails (e.g., invalid format), a warning is logged and null is returned.</p>
+     *
+     * @param response CSC signHash response
+     * @return Instant from TSA, or null if not available or not parsable
+     */
+    private Instant extractTimestamp(CSCSignatureResponse response) {
+        if (response.getTimestampData() == null) {
+            return null;
+        }
+        try {
+            byte[] tokenBytes;
+            Object tsaData = response.getTimestampData();
+            if (tsaData instanceof String tsaString) {
+                tokenBytes = Base64.getDecoder().decode(tsaString);
+            } else if (tsaData instanceof byte[] bytes) {
+                tokenBytes = bytes;
+            } else {
+                log.warn("timestampData has unexpected type {} — cannot extract timestamp",
+                    tsaData.getClass().getName());
+                return null;
+            }
+            // RFC 3161 TimeStampToken: ASN.1 structure with SignedData containing TSTInfo.
+            // TSTInfo has an explicit GenTime field.
+            return parseRfc3161GenTime(tokenBytes);
+        } catch (Exception e) {
+            log.warn("Failed to parse timestampData from CSC response: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Parses RFC 3161 TimeStampToken bytes to extract the genTime.
+     *
+     * <p>The TimeStampToken is a PKCS#7 SignedData containing TSTInfo.
+     * This method uses BouncyCastle to parse the ASN.1 structure and
+     * extract the GenTime field.</p>
+     */
+    private Instant parseRfc3161GenTime(byte[] tokenBytes) {
+        try {
+            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(tokenBytes);
+            org.bouncycastle.asn1.ASN1InputStream asn1In =
+                new org.bouncycastle.asn1.ASN1InputStream(bais);
+            org.bouncycastle.asn1.cms.ContentInfo contentInfo =
+                org.bouncycastle.asn1.cms.ContentInfo.getInstance(asn1In.readObject());
+            asn1In.close();
+            org.bouncycastle.tsp.TimeStampToken token =
+                new org.bouncycastle.tsp.TimeStampToken(contentInfo);
+            return token.getTimeStampInfo().getGenTime().toInstant();
+        } catch (Exception e) {
+            log.debug("Could not parse RFC 3161 timestamp: {}", e.getMessage());
+            return null;
         }
     }
 }

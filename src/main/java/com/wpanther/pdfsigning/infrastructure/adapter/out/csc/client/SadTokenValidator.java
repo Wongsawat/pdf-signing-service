@@ -22,6 +22,10 @@ public class SadTokenValidator {
     // Default values for testing
     private static final long DEFAULT_MIN_EXPIRY_SECONDS = 60;
     private static final long DEFAULT_MAX_EXPIRY_SECONDS = 3600;
+    // Clock skew tolerance: accounts for local clock being behind CSC service clock.
+    // If the remaining validity (expiresIn) is <= this tolerance, the token is
+    // considered expired to avoid signHash failing due to CSC-side expiration.
+    private static final long DEFAULT_CLOCK_SKEW_TOLERANCE_SECONDS = 60;
 
     /**
      * Main constructor with dependency injection.
@@ -98,16 +102,28 @@ public class SadTokenValidator {
     /**
      * Checks if a SAD token is expired based on the issue time and expiresIn value.
      *
-     * @param issuedAt When the SAD token was issued
-     * @param expiresIn The expiresIn value from authorize response
-     * @return true if expired, false otherwise
+     * <p>Applies a clock skew tolerance: if the remaining validity window is less than
+     * or equal to the tolerance, the token is considered expired. This prevents
+     * signHash from failing with "token expired" if the local clock is behind the
+     * CSC service clock (CSC will reject an expired token anyway).</p>
+     *
+     * @param issuedAt When the SAD token was issued (local clock at authorization time)
+     * @param expiresIn The expiresIn value from authorize response (CSC-side validity)
+     * @return true if expired or within clock skew tolerance window, false otherwise
      */
     public boolean isExpired(Instant issuedAt, Long expiresIn) {
         if (issuedAt == null || expiresIn == null) {
             return false;
         }
+        long clockSkewTolerance = cscProperties != null
+            ? cscProperties.getSadToken().getClockSkewToleranceSeconds()
+            : DEFAULT_CLOCK_SKEW_TOLERANCE_SECONDS;
+
+        // Remaining time according to local clock: issuedAt + expiresIn - now
+        // If remaining <= clockSkewTolerance, we may already be expired on CSC side.
         Instant expirationTime = issuedAt.plus(expiresIn, ChronoUnit.SECONDS);
-        return Instant.now().isAfter(expirationTime);
+        Instant nowWithTolerance = Instant.now().plus(clockSkewTolerance, ChronoUnit.SECONDS);
+        return nowWithTolerance.isAfter(expirationTime);
     }
 
     /**

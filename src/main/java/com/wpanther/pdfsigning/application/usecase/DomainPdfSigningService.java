@@ -131,7 +131,12 @@ public class DomainPdfSigningService {
             ? signingResult.transactionId()
             : UUID.randomUUID().toString();
         String certificatePem = extractCertificatePem(signingResult.certificateChain());
-        Instant signatureTimestamp = Instant.now();
+        // Use trusted timestamp from CSC/TSA when available (PAdES-B-T and higher).
+        // For PAdES-B-B (no TSA), falls back to local clock — acceptable since there is
+        // no HSM-issued timestamp in that case.
+        Instant signatureTimestamp = signingResult.timestamp() != null
+            ? signingResult.timestamp()
+            : Instant.now();
 
         log.info("PDF signing completed for document: {}", documentId);
 

@@ -104,5 +104,16 @@ public class CscProperties {
         @Min(value = 60, message = "Max expiry seconds must be at least 60")
         @Max(value = 86400, message = "Max expiry seconds must not exceed 86400 (24 hours)")
         private int maxExpirySeconds = 3600;
+
+        /**
+         * Clock skew tolerance in seconds. Accounts for local clock being behind
+         * the CSC service clock. If remaining validity is less than or equal to
+         * this tolerance, the token is considered expired to avoid signHash
+         * failing with "token expired" (CSC would reject an expired token anyway).
+         * Default: 60 seconds
+         */
+        @Min(value = 0, message = "Clock skew tolerance must be non-negative")
+        @Max(value = 300, message = "Clock skew tolerance must not exceed 300 (5 minutes)")
+        private int clockSkewToleranceSeconds = 60;
     }
 }

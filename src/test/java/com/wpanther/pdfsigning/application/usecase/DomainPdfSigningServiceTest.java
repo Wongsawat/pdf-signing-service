@@ -101,7 +101,7 @@ class DomainPdfSigningServiceTest {
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert(), null));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert(), null, null));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -212,7 +212,7 @@ class DomainPdfSigningServiceTest {
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain, null));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, certChain, null, null));
 
             doThrow(new StorageException("S3 bucket unavailable"))
                 .when(mockStoragePort).store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull());
@@ -244,7 +244,7 @@ class DomainPdfSigningServiceTest {
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert(), null));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert(), null, null));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -274,7 +274,7 @@ class DomainPdfSigningServiceTest {
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert(), null));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, oneCert(), null, null));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -303,7 +303,7 @@ class DomainPdfSigningServiceTest {
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, new X509Certificate[0], null));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, new X509Certificate[0], null, null));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
@@ -333,7 +333,7 @@ class DomainPdfSigningServiceTest {
             when(mockDownloadPort.downloadPdf(originalPdfUrl)).thenReturn(pdfBytes);
             when(mockPdfPort.computeByteRangeDigest(pdfBytes)).thenReturn(digest);
             when(mockSigningPort.signPdfWithCertChain(pdfBytes, digest, padesLevel))
-                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, new X509Certificate[]{badCert}, null));
+                .thenReturn(new SigningPort.SigningResult(signedPdfBytes, new X509Certificate[]{badCert}, null, null));
             when(mockStoragePort.store(eq(signedPdfBytes), eq(DocumentType.SIGNED_PDF), isNull()))
                 .thenReturn(storageUrl);
 
