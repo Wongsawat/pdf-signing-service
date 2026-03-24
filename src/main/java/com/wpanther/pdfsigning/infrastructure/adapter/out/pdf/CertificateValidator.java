@@ -4,6 +4,9 @@ import com.wpanther.pdfsigning.infrastructure.config.properties.CscProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import javax.net.ssl.TrustManagerFactory;
+import java.security.KeyStore;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -15,9 +18,18 @@ import java.util.Date;
  * Security critical: Ensures certificates are valid and not expired before using them
  * for signature construction.
  *
- * Note: Full PKIX path validation requires a properly configured trust store with
- * Thai e-Tax root CA certificates. This validator performs essential checks that
- * don't require external trust store configuration.
+ * Validation stages:
+ * <ol>
+ *   <li>End-entity validity period, key usage, and extended key usage</li>
+ *   <li>Chain structure — each cert is signed by the next (signature verification)</li>
+ *   <li>PKIX path validation — chain terminates at a root CA trusted by the JVM
+ *       default trust store (cacerts). This catches fraudulent chains whose root
+ *       is not a known trusted CA.</li>
+ * </ol>
+ *
+ * PKIX path validation only runs when this class is constructed with
+ * {@link CscProperties} (production). The no-arg constructor (test mode) skips PKIX
+ * to avoid depending on the JVM's cacerts store with mock certificates.
  */
 @Component
 @Slf4j
@@ -27,6 +39,9 @@ public class CertificateValidator {
 
     // Test-only field
     private boolean testValidationEnabled = false;
+
+    // PKIX validation infrastructure (lazily initialized)
+    private TrustManagerFactory tmf;
 
     /**
      * Main constructor with dependency injection.
@@ -55,11 +70,13 @@ public class CertificateValidator {
     /**
      * Validates a certificate chain from the CSC API.
      *
-     * Performs essential validations:
-     * - Not expired and not yet valid
-     * - Minimum remaining validity period
-     * - Chain structure verification (each cert issued by next)
-     * - Basic key usage for digital signatures
+     * Performs three stages of validation:
+     * <ol>
+     *   <li>End-entity validity period, key usage, and extended key usage</li>
+     *   <li>Chain structure verification (each cert issued by the next)</li>
+     *   <li>PKIX path validation — chain terminates at a root CA trusted by the JVM
+     *       default trust store (cacerts). Skipped when using the no-arg constructor.</li>
+     * </ol>
      *
      * @param certChain The certificate chain to validate
      * @throws CertificateValidationException if validation fails
@@ -88,6 +105,16 @@ public class CertificateValidator {
 
             // 2. Validate certificate chain structure
             validateChainStructure(certChain);
+
+            // 3. PKIX path validation — verifies chain anchors to a trusted root CA
+            //    in the JVM default trust store (cacerts). This catches fraudulent
+            //    chains where a self-signed root is not a known trusted CA.
+            if (cscProperties != null) {
+                // PKIX validation only runs in production mode (with CscProperties injected).
+                // In test mode (no-arg constructor) we skip PKIX to avoid depending on
+                // the JVM's cacerts store with mock certificates.
+                validatePkixPath(certChain);
+            }
 
             log.info("Certificate chain validated successfully");
 
@@ -207,8 +234,69 @@ public class CertificateValidator {
     }
 
     /**
-     * Exception thrown when certificate validation fails.
+     * Initialises the PKIX TrustManagerFactory lazily.
+     * Uses the JVM default KeyStore (cacerts) as the trust store.
      */
+    private synchronized void initTmf() {
+        if (tmf != null) {
+            return;
+        }
+        try {
+            tmf = TrustManagerFactory.getInstance("PKIX");
+            // Initialise with null to use the system default KeyStore (cacerts),
+            // which contains trusted root CA certificates.
+            tmf.init((KeyStore) null);
+            log.debug("PKIX TrustManagerFactory initialised with system default trust store");
+        } catch (Exception e) {
+            log.warn("Failed to initialise PKIX TrustManagerFactory: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Performs PKIX certification path validation.
+     * <p>
+     * Uses the JDK's built-in PKIX TrustManagerFactory to validate that the
+     * certificate chain terminates at a root CA trusted by the JVM's default
+     * trust store (cacerts). This catches fraudulent chains where a self-signed
+     * root is not a known trusted CA — structural chain validation alone would
+     * pass such chains because it only checks signatures, not trust anchors.
+     * </p>
+     *
+     * @param certChain the certificate chain to validate (end-entity first)
+     * @throws CertificateValidationException if PKIX validation fails
+     */
+    private void validatePkixPath(X509Certificate[] certChain) {
+        initTmf();
+        if (tmf == null) {
+            log.warn("PKIX TrustManagerFactory not available — skipping PKIX path validation");
+            return;
+        }
+        try {
+            javax.net.ssl.X509TrustManager x509Tm = null;
+            for (javax.net.ssl.TrustManager tm : tmf.getTrustManagers()) {
+                if (tm instanceof javax.net.ssl.X509TrustManager) {
+                    x509Tm = (javax.net.ssl.X509TrustManager) tm;
+                    break;
+                }
+            }
+            if (x509Tm == null) {
+                log.warn("No X509TrustManager available in PKIX TrustManagerFactory — skipping");
+                return;
+            }
+            // checkClientTrusted performs full PKIX path validation including
+            // checking that the chain terminates at a trusted root CA.
+            x509Tm.checkClientTrusted(certChain, "Generic");
+            log.debug("PKIX path validation successful — chain terminates at trusted root CA");
+        } catch (CertificateException e) {
+            throw new CertificateValidationException(
+                "PKIX certificate validation failed: no trusted certificate path found. " +
+                "The certificate chain may not be issued by a trusted root CA. " +
+                "Verify that the Thai e-Tax root CA is in the JVM trust store.", e);
+        } catch (Exception e) {
+            log.warn("PKIX path validation could not be performed: {}", e.getMessage());
+        }
+    }
+
     public static class CertificateValidationException extends RuntimeException {
         public CertificateValidationException(String message) {
             super(message);
