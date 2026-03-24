@@ -65,12 +65,12 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
 
                 int contentLength = connection.getContentLength();
                 long maxSizeBytes = padesProperties.getMaxSizeBytes();
-                if (contentLength > 0 && contentLength > maxSizeBytes) {
+                if (contentLength > maxSizeBytes) {
                     throw new SigningException("PDF too large: " + contentLength + " bytes (max: " + maxSizeBytes + ")");
                 }
 
                 try (InputStream inputStream = connection.getInputStream()) {
-                    byte[] pdfBytes = inputStream.readAllBytes();
+                    byte[] pdfBytes = readBounded(inputStream, maxSizeBytes);
 
                     if (pdfBytes.length == 0) {
                         throw new SigningException("Received empty PDF from URL: " + redact(url));
@@ -88,6 +88,33 @@ public class HttpDocumentDownloadAdapter implements DocumentDownloadPort {
         } catch (IOException e) {
             throw new SigningException("Failed to download PDF from URL: " + redact(url), e);
         }
+    }
+
+    /**
+     * Reads all bytes from an input stream, enforcing a maximum size limit.
+     * <p>
+     * When the Content-Length header is absent (chunked encoding, contentLength == -1),
+     * the size is unknown upfront. This method protects against unbounded memory
+     * allocation by throwing if the download exceeds maxSizeBytes.</p>
+     *
+     * @param inputStream  The input stream to read from
+     * @param maxSizeBytes Maximum allowed bytes (from PadesProperties)
+     * @return All downloaded bytes
+     * @throws SigningException if the downloaded content exceeds maxSizeBytes
+     */
+    private byte[] readBounded(InputStream inputStream, long maxSizeBytes) throws IOException {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream(Math.toIntExact(Math.min(maxSizeBytes, Integer.MAX_VALUE)));
+        byte[] chunk = new byte[8192];
+        int bytesRead;
+        long totalRead = 0;
+        while ((bytesRead = inputStream.read(chunk)) != -1) {
+            totalRead += bytesRead;
+            if (totalRead > maxSizeBytes) {
+                throw new SigningException("PDF exceeds maximum size: " + totalRead + " bytes (max: " + maxSizeBytes + ")");
+            }
+            buffer.write(chunk, 0, bytesRead);
+        }
+        return buffer.toByteArray();
     }
 
     /**
